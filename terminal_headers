@@ -1,0 +1,6 @@
+/*
+  Content-Security-Policy: default-src 'self'; connect-src 'self' https://atlas-v2-jcsn.onrender.com https://api.anthropic.com https://query1.finance.yahoo.com https://atlas-finance-proxy.javieradroherbiosca.workers.dev https://corsproxy.io https://api.codetabs.com https://api.allorigins.win https://proxy.cors.sh; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://s3.tradingview.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:; frame-src https://screener.atlasglobalterminal.com https://www.tradingview-widget.com https://s.tradingview.com
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000
+  X-Content-Type-Options: nosniff

@@ -28,7 +28,10 @@ JS = r"""() => { const q = s => document.querySelector(s), tx = s => { const e =
   return { name: tx('#nm'), dk: [...document.querySelectorAll('#dcfOut .dk')].map(e => e.innerText.replace(/\n/g, ' ')),
     dwarn: !!q('#dcfOut .dwarn'), models: [...document.querySelectorAll('.vmc')].map(e => ({ t: e.querySelector('.t').innerText.toUpperCase(),
     v: e.querySelector('.v').innerText.replace(/\n/g, ' '), flagged: !!e.querySelector('.fit') || /floor|if it never grows/i.test(e.innerText) && /EARNINGS POWER/i.test(e.querySelector('.t').innerText) })),
-    text: (q('#p-dcf') || document.body).innerText.slice(0, 20000) } }"""
+    text: (q('#p-dcf') || document.body).innerText.slice(0, 20000),
+    peSum: (() => { const r = [...document.querySelectorAll('#keystats tr')].find(x => /P\/E/.test(x.innerText)); return r ? r.innerText : null })(),
+    peStats: (() => { const r = [...document.querySelectorAll('#statsBody .kv')].find(x => /^P\/E/.test(x.innerText)); return r ? r.innerText : null })(),
+    peSwot: (() => { const r = [...document.querySelectorAll('#swotBody .fig')].find(x => /P\/E/.test(x.innerText)); return r ? r.innerText : null })() } }"""
 
 async def run(base, tickers, out):
     res = []
@@ -47,6 +50,8 @@ async def run(base, tickers, out):
                     try: await pg.wait_for_selector('#dcfOut .dk, #dcfOut .dwarn, #dcfInner .note', timeout=120000)
                     except Exception: pass
                     await pg.wait_for_timeout(1500)
+                    try: await pg.wait_for_selector('#swotBody .swot', timeout=30000)
+                    except Exception: pass
                     r = await pg.evaluate(JS); r['t'] = t; r['errs'] = list(errs); res.append(r)
                 except Exception as e:
                     res.append({'t': t, 'fail': str(e)[:150]})
@@ -63,6 +68,8 @@ def analyze(res):
         if r.get('fail'): fails.append(f"{t}: page failed ({r['fail'][:80]})"); continue
         if r['errs']: issues.append(f"{t}: JavaScript error: {'; '.join(r['errs'])[:150]}")
         if any(x in (r.get('text') or '') for x in ['NaN', 'undefined', 'Infinity']): issues.append(f'{t}: NaN/undefined/Infinity shown in the Valuation tab')
+        pes = [x for x in (n((r.get('peSum') or '').split('E')[-1]), n((r.get('peStats') or '').split('\n')[-1]), n(r.get('peSwot'))) if x]
+        if len(pes) >= 2 and max(pes) / min(pes) > 1.06: issues.append(f'{t}: P/E differs between sections {pes}')
         dcf = pxs = None
         for x in r['dk']:
             X = x.upper()

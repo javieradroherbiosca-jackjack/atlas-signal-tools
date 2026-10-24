@@ -8,6 +8,8 @@ a user sees it:
   C. Impossible values in scored rows (score outside 0-100, price or market value <= 0).
   D. Analyst upside must match target price / price.
   E. "Who owns it": the owners endpoint must return the same company (catches name/ADR mix-ups).
+  G. Second source: for US companies in the sample, sales growth (last fiscal year) and net margin (last
+     twelve months) are recomputed from the SEC's official XBRL filings and compared with Atlas.
   F. Writes crosscheck.json: our figures for a sample of stocks (today's picks, Insider Picks and a random
      set), for the scheduled task to compare against a second data source.
 
@@ -35,6 +37,56 @@ def get(path, tries=3, timeout=120):
 def num(m, k):
     v = m.get(k)
     return v if isinstance(v, (int, float)) and v == v else None
+
+
+UA = {'User-Agent': 'Atlas Global Terminal data audit javier.adroher@atlasglobalterminal.com'}
+REV_TAGS = ['RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenues', 'SalesRevenueNet', 'RevenueFromContractWithCustomerIncludingAssessedTax']
+NI_TAGS = ['NetIncomeLoss', 'ProfitLoss']
+
+
+def sec_json(url):
+    req = urllib.request.Request(url, headers=UA)
+    return json.loads(urllib.request.urlopen(req, timeout=60).read().decode())
+
+
+def _days(a, b):
+    from datetime import date
+    return (date.fromisoformat(b) - date.fromisoformat(a)).days
+
+
+def sec_fy(f, tags):
+    for t in tags:
+        u = f['facts'].get('us-gaap', {}).get(t, {}).get('units', {}).get('USD')
+        if not u:
+            continue
+        fy = {x['frame']: x['val'] for x in u if x.get('form') in ('10-K', '10-K/A') and x.get('fp') == 'FY' and x.get('frame') and len(x['frame']) == 6}
+        if len(fy) >= 2:
+            return dict(sorted(fy.items()))
+    return {}
+
+
+def sec_quarters(f, tags):
+    best = {}
+    for t in tags:
+        u = f['facts'].get('us-gaap', {}).get(t, {}).get('units', {}).get('USD')
+        if not u:
+            continue
+        q = {x['end']: x['val'] for x in u if x.get('start') and x.get('end') and 80 <= _days(x['start'], x['end']) <= 100}
+        for x in u:   # fourth quarter = full year - nine months
+            if x.get('start') and 350 <= _days(x['start'], x['end']) <= 380 and x['end'] not in q:
+                nine = [y for y in u if y.get('start') == x['start'] and y.get('end') and 260 <= _days(y['start'], y['end']) <= 280]
+                if nine:
+                    q[x['end']] = x['val'] - nine[-1]['val']
+        if len(q) > len(best):
+            best = q
+    return dict(sorted(best.items()))
+
+
+def sec_ttm(s):
+    ks = list(s)[-4:]
+    if len(ks) < 4 or _days(ks[0], ks[-1]) > 300:
+        return None, None
+    return sum(s[k] for k in ks), ks[-1]
 
 
 def red_flags(m):
@@ -145,6 +197,41 @@ def main():
         cross.append({'ticker': t, 'name': m.get('name'), 'price': m.get('price'), 'marketCap': m.get('marketCap'),
                       'pe': m.get('pe'), 'revenueGrowth': m.get('revenueGrowth'), 'profitMargin': m.get('profitMargin'),
                       'debtEquity': m.get('debtEquity'), 'health': m.get('health')})
+
+    # G: second source (SEC XBRL) for US companies in the sample
+    sec_done = 0
+    try:
+        tick = sec_json('https://www.sec.gov/files/company_tickers.json')
+        cik = {v['ticker'].upper(): v['cik_str'] for v in tick.values()}
+    except Exception as e:  # noqa: BLE001
+        cik = {}
+        warns.append({'t': '-', 'check': 'G', 'msg': f'SEC ticker list not reachable: {e}'})
+    for x in cross:
+        t = x['ticker']
+        if '.' in t or '-' in t or t not in cik:
+            continue
+        try:
+            f = sec_json(f'https://data.sec.gov/api/xbrl/companyfacts/CIK{cik[t]:010d}.json')
+            time.sleep(0.15)
+        except Exception as e:  # noqa: BLE001
+            warns.append({'t': t, 'check': 'G', 'msg': f'SEC facts not readable: {e}'})
+            continue
+        sec_done += 1
+        rev = sec_fy(f, REV_TAGS)
+        ks = list(rev)[-2:]
+        if len(ks) == 2 and rev[ks[0]] and x.get('revenueGrowth') is not None:
+            g = rev[ks[1]] / rev[ks[0]] - 1
+            if abs(g - x['revenueGrowth']) > 0.03:
+                errors.append({'t': t, 'check': 'G', 'msg': f"sales growth {x['revenueGrowth'] * 100:.1f}% on Atlas vs {g * 100:.1f}% in SEC filings ({ks[0]}→{ks[1]})"})
+        r, re_ = sec_ttm(sec_quarters(f, REV_TAGS))
+        n, ne = sec_ttm(sec_quarters(f, NI_TAGS))
+        if r and n is not None and re_ == ne and x.get('profitMargin') is not None and _days(re_, time.strftime('%Y-%m-%d')) < 200:
+            mg = n / r
+            if abs(mg - x['profitMargin']) > 0.05:
+                errors.append({'t': t, 'check': 'G', 'msg': f"net margin {x['profitMargin'] * 100:.1f}% on Atlas vs {mg * 100:.1f}% in SEC filings (twelve months to {re_})"})
+            elif abs(mg - x['profitMargin']) > 0.02:
+                warns.append({'t': t, 'check': 'G', 'msg': f"net margin {x['profitMargin'] * 100:.1f}% vs {mg * 100:.1f}% at the SEC (small gap: one-offs or discontinued operations?)"})
+    print(f'second source: {sec_done} US companies checked against SEC filings')
 
     json.dump(cross, open('crosscheck.json', 'w'), indent=1)
     rep = {'checked_rows': len(scored), 'sample': len(sample), 'errors': errors, 'warnings': warns}

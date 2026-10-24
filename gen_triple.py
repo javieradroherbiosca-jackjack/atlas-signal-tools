@@ -20,7 +20,7 @@ import json, sys, datetime as dt, collections, os
 WINDOW = 60
 MIN_USD = 1_000_000          # US (SEC Form 4)
 MIN_USD_INTL = 250_000       # other markets (MAR / national regulators): insider buys are smaller
-MAX_FROM_LOW = 25.0
+MAX_FROM_LOW = 20.0   # 20% since 24 Oct 2026 (Javier: one rule across Atlas)
 MIN_FUNDS = 1
 SHOW = 12
 SM_ALIAS = {}  # {insider ticker: ticker the funds hold} when they differ

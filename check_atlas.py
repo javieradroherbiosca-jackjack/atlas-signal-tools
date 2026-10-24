@@ -56,7 +56,7 @@ ts = load('triple-signal.json', 'https://atlasglobalterminal.com/triple-signal.j
 if ts:
     W = 'triple-signal'
     rules = ts.get('rules', {})
-    maxlow = rules.get('maxFromLowPct', 25)
+    maxlow = rules.get('maxFromLowPct', 20)
     age = days_ago(ts.get('asOf'))
     if age is None or age > 8:
         err(W, f"asOf {ts.get('asOf')} is {age} days old (rebuilt every Monday)")

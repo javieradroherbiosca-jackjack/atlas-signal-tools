@@ -85,8 +85,11 @@ def analyze(res):
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(); ap.add_argument('--base', default='https://atlasglobalterminal.com'); ap.add_argument('--out', default='valuation_audit_out.json')
-    ap.add_argument('--tickers', default='valuation_audit_tickers.json'); a = ap.parse_args()
+    ap.add_argument('--tickers', default='valuation_audit_tickers.json')
+    ap.add_argument('--batch', type=int, default=None, help='0-based slice number (with --of): audit a large list in parts, one per day')
+    ap.add_argument('--of', type=int, default=7); a = ap.parse_args()
     tickers = json.load(open(a.tickers))
+    if a.batch is not None: tickers = tickers[a.batch % a.of::a.of]
     try: res = asyncio.run(run(a.base, tickers, a.out))
     except Exception as e: print('AUDIT COULD NOT RUN:', e); sys.exit(2)
     issues, fails = analyze(res)

@@ -55,14 +55,19 @@ def _days(a, b):
 
 
 def sec_fy(f, tags):
+    cands = []
     for t in tags:
         u = f['facts'].get('us-gaap', {}).get(t, {}).get('units', {}).get('USD')
         if not u:
             continue
         fy = {x['frame']: x['val'] for x in u if x.get('form') in ('10-K', '10-K/A') and x.get('fp') == 'FY' and x.get('frame') and len(x['frame']) == 6}
         if len(fy) >= 2:
-            return dict(sorted(fy.items()))
-    return {}
+            cands.append(dict(sorted(fy.items())))
+    # 25 Oct 2026: companies switch revenue tags over the years; use the tag with the most recent year, and only if recent
+    if not cands:
+        return {}
+    best = max(cands, key=lambda d: list(d)[-1])
+    return best if int(list(best)[-1][2:]) >= int(time.strftime('%Y')) - 2 else {}
 
 
 def sec_quarters(f, tags):

@@ -93,11 +93,17 @@ def red_flags(m):
     """Mirror of healthScore() red flags in server.js."""
     fin = bool(FIN.search(m.get('industry') or '')) and not re.search('credit services', m.get('industry') or '', re.I)
     soft = m.get('sector') == 'Utilities' or bool(SOFT_IND.search(m.get('industry') or ''))
-    a, b, p, de, sl, rg = (num(m, k) for k in ('altman', 'beneish', 'piotroski', 'debtEquity', 'sloanRatio', 'revenueGrowth'))
+    a, b, p, de0, sl, rg = (num(m, k) for k in ('altman', 'beneish', 'piotroski', 'debtEquity', 'sloanRatio', 'revenueGrowth'))
+    ev, fy = num(m, 'evEbitda'), num(m, 'fcfYield')
+    # 25 Oct 2026: debtEquity is net debt / EBITDA; with negative EBITDA the sign flips (see healthDerive in server.js)
+    if de0 is not None and ev is not None and ev < 0:
+        de = 99 if (de0 < 0 and fy is not None and fy < 0) else None
+    else:
+        de = None if de0 is None else max(0.0, de0)
     f = []
     if not soft and not fin and a is not None and a < 1.81 and ((de is not None and de > 2) or (p is not None and p <= 3) or a < 1.1):
         f.append('distress')
-    if b is not None and b > -1.78 and ((sl is not None and sl > 0.1) or (rg is not None and rg < 0.3)):
+    if not fin and b is not None and b > -1.78 and ((sl is not None and sl > 0.1) or (rg is not None and rg < 0.3)):
         f.append('accounts')
     if p is not None and p <= 2:
         f.append('piotroski')

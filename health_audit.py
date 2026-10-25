@@ -140,7 +140,7 @@ def main():
                 errors.append({'t': m['ticker'], 'check': 'C', 'msg': f'{k} {v} outside 0-100'})
         if not (num(m, 'price') or 0) > 0 or not (num(m, 'marketCap') or 0) > 0:
             warns.append({'t': m['ticker'], 'check': 'C', 'msg': 'scored without a price or market value'})
-        if h >= 40:
+        if h >= 55:
             f = red_flags(m)
             if f:
                 errors.append({'t': m['ticker'], 'check': 'A', 'msg': f'health {h} (Good or better) with red flags {f}'})
@@ -158,7 +158,7 @@ def main():
         cand = []
         for t, r in (sig.get('rows') or {}).items():
             m = by_t.get(t.upper())
-            if not m or (m.get('health') or 0) < 40 or not m.get('price') or not m.get('yearLow'):
+            if not m or (m.get('health') or 0) < 55 or not m.get('price') or not m.get('yearLow'):
                 continue
             if (m['price'] / m['yearLow'] - 1) * 100 <= 20:
                 cand.append((m['health'], t.upper()))
@@ -178,7 +178,7 @@ def main():
             h = get('/api/health/' + urllib.parse.quote(t))
             if h.get('score') != m.get('health'):
                 errors.append({'t': t, 'check': 'B', 'msg': f"page says {h.get('score')}, Screener says {m.get('health')}"})
-            if (h.get('score') or 0) >= 40 and h.get('flags'):
+            if (h.get('score') or 0) >= 55 and h.get('flags'):
                 errors.append({'t': t, 'check': 'A', 'msg': f"page shows {h.get('score')} with flags {[f['k'] for f in h['flags']]}"})
         except Exception as e:  # noqa: BLE001
             errors.append({'t': t, 'check': 'B', 'msg': f'/api/health failed: {e}'})

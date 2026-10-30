@@ -79,6 +79,7 @@ if ts:
         fl = (p / lo - 1) * 100
         if abs(fl - (r.get('fromLow') or 0)) > 0.6: err(w, f"fromLow {r.get('fromLow')} ≠ computed {fl:.1f}")
         if fl > maxlow + 0.05: err(w, f'{fl:.1f}% above the low (rule: ≤ {maxlow}%)')
+        if hi > lo and (p - lo) / (hi - lo) > rules.get('maxRangePos', 1 / 3) + 0.005: err(w, f'{(p - lo) / (hi - lo) * 100:.0f}% of its 52w range (rule: lower third)')
         if (r.get('funds') or 0) < 1 or not r.get('holders'): err(w, 'no Smart Money holder')
         for h in r.get('holders', []):
             if not (h.get('manager') or h.get('fundName')): err(w, f"holder without a name ({h.get('fundId')})")

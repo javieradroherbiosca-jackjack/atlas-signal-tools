@@ -21,6 +21,7 @@ WINDOW = 60
 MIN_USD = 1_000_000          # US (SEC Form 4)
 MIN_USD_INTL = 250_000       # other markets (MAR / national regulators): insider buys are smaller
 MAX_FROM_LOW = 20.0   # 20% since 24 Oct 2026 (Javier: one rule across Atlas)
+MAX_RANGE_POS = 1 / 3   # 30 Oct 2026 (Javier, BATS): also in the lower third of its 52-week range
 MIN_FUNDS = 1
 SHOW = 12
 SM_ALIAS = {}  # {insider ticker: ticker the funds hold} when they differ
@@ -317,7 +318,7 @@ for sym, a in agg.items():
         needs['quotes'].append(sym)
         continue
     fl = (p / lo - 1) * 100
-    if fl > MAX_FROM_LOW:
+    if fl > MAX_FROM_LOW or (hi > lo and (p - lo) / (hi - lo) > MAX_RANGE_POS):
         continue
     hs = sorted(holders[hsym], key=lambda x: -(x.get('value') or 0))
     market = 'JP' if sym.endswith('.T') else ('INTL' if intl else 'US')
@@ -374,7 +375,7 @@ if len(out) >= 12:
         out.remove(r)
 res = {
     'asOf': today.isoformat(),
-    'rules': {'windowDays': WINDOW, 'minInsiderUsd': MIN_USD, 'minInsiderUsdIntl': MIN_USD_INTL, 'maxFromLowPct': MAX_FROM_LOW, 'minFunds': MIN_FUNDS, 'minBuybackPctMcap': MIN_BB_PCT, 'minJpyBuyback': MIN_JPY_BUYBACK, 'buybackGate': f'buyback-only needs Health {MIN_HEALTH}+ or 12m FCF >= 50% of the buyback'},
+    'rules': {'windowDays': WINDOW, 'minInsiderUsd': MIN_USD, 'minInsiderUsdIntl': MIN_USD_INTL, 'maxFromLowPct': MAX_FROM_LOW, 'maxRangePos': round(MAX_RANGE_POS, 4), 'minFunds': MIN_FUNDS, 'minBuybackPctMcap': MIN_BB_PCT, 'minJpyBuyback': MIN_JPY_BUYBACK, 'buybackGate': f'buyback-only needs Health {MIN_HEALTH}+ or 12m FCF >= 50% of the buyback'},
     'gated': gated,
     'total': len(out), 'passed': passed, 'show': SHOW, 'stocks': out,
     'intlLedger': sorted(ledger.values(), key=lambda r: r['date']),

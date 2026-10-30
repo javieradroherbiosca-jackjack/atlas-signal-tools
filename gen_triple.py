@@ -11,7 +11,7 @@ Output: triple-signal.json  (read by the Terminal's Triple Signal section)
 Rules: signal 1 = open-market buys (P-Purchase, A) by officers/directors (pure 10% owners
 excluded) with transactionDate in the last WINDOW days, total >= MIN_USD, OR a company
 buyback (bb-quarterly.json: net repurchases >= MIN_BB_PCT of market cap in the latest
-quarter; Japan: jp-buybacks.json, EDINET monthly reports >= MIN_JPY_BUYBACK in 60 days);
+quarter, and only if the company can afford it: Health 50+ or 12m FCF >= half of it, see triple_gate.py; Japan: jp-buybacks.json, EDINET monthly reports >= MIN_JPY_BUYBACK in 60 days);
 held by >= 1 tracked fund (bad-CIK funds excluded); price <= MAX_FROM_LOW
 above the 52-week low.
 """
@@ -360,6 +360,10 @@ needs['buyback_check'] = sorted(_bbc)
 # register-held names the screener doesn't carry (Paris): ask for their quotes, then they enter the checks above
 needs['quotes'] = sorted(set(needs['quotes']) | {t for t in mh_noquote if not (qt.get(t) or {}).get('price')})
 json.dump(needs, open('needs.json', 'w'))
+# 30 Oct 2026: buyback-only names must afford the buyback (Health 50+ or 12m FCF >= half of it); adds 'health' to every row
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from triple_gate import gate, MIN_HEALTH
+out, gated = gate(out)
 out.sort(key=lambda r: (-r['funds'], -r['insiderUsd']))
 passed = len(out)
 # Publish a multiple of 12 (fills 4, 3, 2 or 1 columns with no empty cells): keep the strongest.
@@ -370,7 +374,8 @@ if len(out) >= 12:
         out.remove(r)
 res = {
     'asOf': today.isoformat(),
-    'rules': {'windowDays': WINDOW, 'minInsiderUsd': MIN_USD, 'minInsiderUsdIntl': MIN_USD_INTL, 'maxFromLowPct': MAX_FROM_LOW, 'minFunds': MIN_FUNDS, 'minBuybackPctMcap': MIN_BB_PCT, 'minJpyBuyback': MIN_JPY_BUYBACK},
+    'rules': {'windowDays': WINDOW, 'minInsiderUsd': MIN_USD, 'minInsiderUsdIntl': MIN_USD_INTL, 'maxFromLowPct': MAX_FROM_LOW, 'minFunds': MIN_FUNDS, 'minBuybackPctMcap': MIN_BB_PCT, 'minJpyBuyback': MIN_JPY_BUYBACK, 'buybackGate': f'buyback-only needs Health {MIN_HEALTH}+ or 12m FCF >= 50% of the buyback'},
+    'gated': gated,
     'total': len(out), 'passed': passed, 'show': SHOW, 'stocks': out,
     'intlLedger': sorted(ledger.values(), key=lambda r: r['date']),
     # only symbols some tracked fund holds (keeps the file small); a fund adding a name later re-enters it via new buys

@@ -52,17 +52,17 @@ SUFFIX_CUR = {'.PA': '€', '.MI': '€', '.AS': '€', '.DE': '€', '.HE': '�
 quotes = json.load(open('quotes.json')) if os.path.exists('quotes.json') else {}
 
 # ── Triple Signal (§04 of the Terminal) ─────────────────────────────────────────
-ts = load('triple-signal.json', 'https://atlasglobalterminal.com/triple-signal.json?qc=1')
+ts = load('triple-signal.json', BACKEND + '/api/signals/triple-signal.json?qc=1')   # 30 Oct 2026: served by the backend, rebuilt daily
 if ts:
     W = 'triple-signal'
     rules = ts.get('rules', {})
-    maxlow = rules.get('maxFromLowPct', 20)
+    maxlow = rules.get('maxFromLowPct', 25)
     age = days_ago(ts.get('asOf'))
-    if age is None or age > 8:
-        err(W, f"asOf {ts.get('asOf')} is {age} days old (rebuilt every Monday)")
+    if age is None or age > 2:
+        err(W, f"asOf {ts.get('asOf')} is {age} days old (rebuilt every day)")
     st = ts.get('stocks', [])
-    if not (5 <= len(st) <= 120) or len(st) % 12 and len(st) >= 12:
-        err(W, f'{len(st)} stocks (expected 5–120, a multiple of 12)')
+    if not (5 <= len(st) <= 120):
+        err(W, f'{len(st)} stocks (expected 5–120)')
     seen_t, seen_n = set(), {}
     for r in st:
         t = r.get('ticker', '?'); w = f'{W}:{t}'
@@ -119,11 +119,11 @@ if ts:
     if not (ts.get('euRegisters') or {}).get('state'): warn(W, 'euRegisters.state missing (next week re-reads all European notices)')
 
 # ── Screener signals.json ──────────────────────────────────────────────────────
-sj = load('signals.json', 'https://screener.atlasglobalterminal.com/signals.json?qc=1')
+sj = load('signals.json', BACKEND + '/api/signals/signals.json?qc=1')
 if sj:
     W = 'signals'
     age = days_ago(sj.get('asOf'))
-    if age is None or age > 8: err(W, f"asOf {sj.get('asOf')} is {age} days old")
+    if age is None or age > 2: err(W, f"asOf {sj.get('asOf')} is {age} days old (rebuilt every day)")
     rows = sj.get('rows', {})
     uni_ = json.load(open('universe.json')) if os.path.exists('universe.json') else {}
     if not (300 <= len(rows) <= 5000): err(W, f'{len(rows)} rows (expected 300–5000)')

@@ -245,7 +245,7 @@ if os.path.exists('bafin.csv') and _mhj.get('aliases'):
                    'date': f"{_y}-{_m}-{_d}", 'source': 'BaFin register'})
         _have.add((_a[0], _f[0].lower()))
 # FR / IT / SE / NO / DK / BE registers, read by eu_registers.py in the weekly job (eu-registers.json).
-_eur = J('eu-registers.json', {}) or {}
+_eur = J('eu-registers.json', {}) or (prev.get('euRegisters') or {})   # 30 Oct 2026: daily runs reuse the stakes read on Monday
 _mhk = {(y['fundId'], (y.get('issuer') or '').lower()) for y in mh}
 mh += [x for x in _eur.get('stakes', []) if (x.get('fundId'), (x.get('issuer') or '').lower()) not in _mhk]
 MH_SUF = {'UK': ('.L',), 'NL': ('.AS',), 'DE': ('.DE', '.F'), 'CH': ('.SW',), 'FR': ('.PA',), 'IT': ('.MI',), 'SE': ('.ST',),

@@ -95,6 +95,9 @@ async def sanity(b):
     pg = await b.new_page(viewport={'width': 1500, 'height': 1000})
     await pg.goto('https://atlasglobalterminal.com/', wait_until='domcontentloaded', timeout=90000)
     await pg.wait_for_timeout(40000)
+    # 1 Nov 2026: the sections are folded into Today's Picks (one open at a time); open them all to check every card
+    try: await pg.evaluate("window.atlasUnfoldAll && window.atlasUnfoldAll()")
+    except Exception: pass
     for btn in await pg.query_selector_all('.v2-more, #tsMore'):
         try: await btn.click(); await pg.wait_for_timeout(200)
         except Exception: pass

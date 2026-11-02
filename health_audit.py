@@ -108,7 +108,8 @@ def red_flags(m):
     f = []
     if not soft and not fin and a is not None and a < 1.81 and ((de is not None and de > 2) or (p is not None and p <= 3) or a < 1.1):
         f.append('distress')
-    if not fin and b is not None and b > -1.78 and ((sl is not None and sl > 0.1) or (rg is not None and rg < 0.3)):
+    # 2 Nov 2026: utilities and concession groups get Beneish as a warning, not a flag (healthScore add() in server.js)
+    if not soft and not fin and b is not None and b > -1.78 and ((sl is not None and sl > 0.1) or (rg is not None and rg < 0.3)):
         f.append('accounts')
     if p is not None and p <= 2:
         f.append('piotroski')

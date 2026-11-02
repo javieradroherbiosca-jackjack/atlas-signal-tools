@@ -18,7 +18,8 @@ async def terminal(b):
     pg.on('pageerror', lambda e: errs.append(str(e)))
     await pg.goto('https://atlasglobalterminal.com/', wait_until='domcontentloaded', timeout=90000)
     try:
-        await pg.wait_for_selector('#tripleGrid .card-triple', timeout=180000)
+        # 2 Nov 2026: the sections are folded into Today's Picks since 1 Nov, so the cards load hidden
+        await pg.wait_for_selector('#tripleGrid .card-triple', state='attached', timeout=180000)
     except Exception:
         err('terminal', 'Triple Signal cards did not load in 3 minutes')
     await pg.wait_for_timeout(15000)   # let the other sections load from the backend

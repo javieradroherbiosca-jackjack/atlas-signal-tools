@@ -363,7 +363,7 @@ needs['quotes'] = sorted(set(needs['quotes']) | {t for t in mh_noquote if not (q
 json.dump(needs, open('needs.json', 'w'))
 # 30 Oct 2026: buyback-only names must afford the buyback (Health 50+ or 12m FCF >= half of it); adds 'health' to every row
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from triple_gate import gate, MIN_HEALTH
+from triple_gate import gate, MIN_HEALTH, MIN_HEALTH_ALL, NET_SELL_DAYS
 out, gated = gate(out)
 out.sort(key=lambda r: (-r['funds'], -r['insiderUsd']))
 passed = len(out)
@@ -375,7 +375,7 @@ if len(out) >= 12:
         out.remove(r)
 res = {
     'asOf': today.isoformat(),
-    'rules': {'windowDays': WINDOW, 'minInsiderUsd': MIN_USD, 'minInsiderUsdIntl': MIN_USD_INTL, 'maxFromLowPct': MAX_FROM_LOW, 'maxRangePos': round(MAX_RANGE_POS, 4), 'minFunds': MIN_FUNDS, 'minBuybackPctMcap': MIN_BB_PCT, 'minJpyBuyback': MIN_JPY_BUYBACK, 'buybackGate': f'buyback-only needs Health {MIN_HEALTH}+ or 12m FCF >= 50% of the buyback'},
+    'rules': {'windowDays': WINDOW, 'minInsiderUsd': MIN_USD, 'minInsiderUsdIntl': MIN_USD_INTL, 'maxFromLowPct': MAX_FROM_LOW, 'maxRangePos': round(MAX_RANGE_POS, 4), 'minFunds': MIN_FUNDS, 'minBuybackPctMcap': MIN_BB_PCT, 'minJpyBuyback': MIN_JPY_BUYBACK, 'buybackGate': f'buyback-only needs Health {MIN_HEALTH}+ or 12m FCF >= 50% of the buyback', 'healthMin': MIN_HEALTH_ALL, 'insiderNetSellDays': NET_SELL_DAYS},
     'gated': gated,
     'total': len(out), 'passed': passed, 'show': SHOW, 'stocks': out,
     'intlLedger': sorted(ledger.values(), key=lambda r: r['date']),

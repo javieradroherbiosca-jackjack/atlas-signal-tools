@@ -1,0 +1,7 @@
+Valuation audit: 231/231 pages read, 5 unexplained issues, 0 pages failed
+ ISSUE ALNY: Ev/Sales Vs Own History 493.94 vs price 155.94 (3.17x), not explained
+ ISSUE YMM: Comparable Companies 206.17 vs price 61.11 (3.37x), not explained
+ ISSUE JLL: Tangible Book Value 50.52 vs price 370.80 (0.14x), not explained
+ ISSUE JOE: Tangible Book Value 13.54 vs price 69.97 (0.19x), not explained
+ ISSUE BEKE: Net-Net (Graham Liquidation) 21.43 vs price 125.75 (0.17x), not explained
+exit=1

@@ -13,6 +13,11 @@ for Today's Picks.
     open-market purchases in dollars (SEC Form 4, backend /api/insider/company), an insider-only signal is dropped
     and an insider + buyback signal is judged as a buyback alone.
 
+10 Nov 2026 (Javier, the Danieli case), two more rules for every row:
+  * Smart Money must not be leaving: a name whose tracked holders ALL reduced (or exited) last quarter is dropped
+    (backend /api/smartmoney/owners; a register stake with no quarter move counts as held).
+  * Funds and other investment vehicles (closed-end funds, ETFs) are not companies: dropped (backend /api/profiles).
+
 Usage: imported by gen_triple.py, or `python3 triple_gate.py triple-signal.json` to re-gate a published file.
 """
 import json, sys, urllib.request, datetime
@@ -53,10 +58,31 @@ def net_insider(t):
     return buys, sells
 
 
+def sm_leaving(r):
+    """True when every tracked holder of the row reduced or exited its position last quarter."""
+    import urllib.parse
+    d = _get('/api/smartmoney/owners/' + urllib.parse.quote(r['ticker']))
+    if not d or not isinstance(d.get('holders'), list):
+        return False   # no data: do not drop blindly
+    mv = {h.get('fundId'): (h.get('move') or '').upper() for h in d['holders']}
+    moves = [mv.get(h.get('fundId')) for h in r.get('holders', [])]
+    return bool(moves) and all(m in ('REDUCED', 'EXITED', 'SOLD') for m in moves)
+
+
+def is_vehicle(t):
+    import urllib.parse
+    p = (_get('/api/profiles?symbols=' + urllib.parse.quote(t)) or {}).get(t) or {}
+    return bool(p.get('isFund') or p.get('isEtf'))
+
+
 def gate(rows, log=print):
     keep, dropped = [], []
     for r in rows:
         t = r['ticker']
+        if is_vehicle(t):
+            dropped.append(t); log(f'gate: {t} dropped (fund / investment vehicle, not a company)'); continue
+        if sm_leaving(r):
+            dropped.append(t); log(f'gate: {t} dropped (Smart Money leaving: every holder reduced last quarter)'); continue
         h = _get(f'/api/health/{t}') or {}
         r['health'] = h.get('score') if isinstance(h.get('score'), (int, float)) else None
         if r['health'] is not None and r['health'] < MIN_HEALTH_ALL:
@@ -92,5 +118,7 @@ if __name__ == '__main__':
     d.setdefault('rules', {})['buybackGate'] = f'buyback-only needs Health {MIN_HEALTH}+ or 12m FCF >= 50% of the buyback'
     d['rules']['healthMin'] = MIN_HEALTH_ALL
     d['rules']['insiderNetSellDays'] = NET_SELL_DAYS
+    d['rules']['smartMoneyNotLeaving'] = True
+    d['rules']['noFunds'] = True
     json.dump(d, open(f, 'w'), indent=1)
     print('dropped:', dropped)

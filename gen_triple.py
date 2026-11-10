@@ -133,6 +133,9 @@ for b in buys:
     usd = (b.get('securitiesTransacted') or 0) * (b.get('price') or 0)
     if usd <= 0:
         continue
+    _u = dict(uni.get(b['symbol']) or {}); _u.update({k: v for k, v in (qt.get(b['symbol']) or {}).items() if v})
+    if _u.get('yearLow') and _u.get('yearHigh') and not (_u['yearLow'] * 0.9 <= (b.get('price') or 0) <= _u['yearHigh'] * 1.1):
+        continue   # price outside the 52-week range: feed error (10 Nov 2026)
     us_ledger.append({'s': b['symbol'], 'c': b.get('reportingCik'), 'n': b['reportingName'], 'o': b.get('typeOfOwner'), 'd': td,
                       'q': b.get('securitiesTransacted'), 'p': b.get('price')})
     a = agg[b['symbol']]
@@ -164,6 +167,11 @@ for r in sorted(ledger.values(), key=lambda r: r['id']):
                 r = {**r, 'px': r['px'] / f, 'usd': round(r['usd'] / f)}
             else:        # London quotes in pence vs the trade in pounds: value is right, show the price in pence
                 r = {**r, 'px': r['px'] / f}
+    # 10 Nov 2026 (Javier, Danieli): a trade priced outside the stock's own 52-week range (with a 10% margin) is a
+    # feed error (e.g. 142 EUR for a 35 EUR share): its value can't be trusted, so the row is dropped.
+    _u = dict(uni.get(r['key']) or {}); _u.update({k: v for k, v in (qt.get(r['key']) or {}).items() if v})
+    if _u.get('yearLow') and _u.get('yearHigh') and not (_u['yearLow'] * 0.9 <= r['px'] <= _u['yearHigh'] * 1.1):
+        continue
     # A "buy" worth more than 2% of the whole company in one go isn't an open-market purchase: it's shares
     # received in an acquisition (EQT/Coller), a placement or a takeover. Not a conviction signal.
     _mc = (uni.get(r['key']) or {}).get('marketCap') or (qt.get(r['key']) or {}).get('marketCap')
@@ -375,7 +383,7 @@ if len(out) >= 12:
         out.remove(r)
 res = {
     'asOf': today.isoformat(),
-    'rules': {'windowDays': WINDOW, 'minInsiderUsd': MIN_USD, 'minInsiderUsdIntl': MIN_USD_INTL, 'maxFromLowPct': MAX_FROM_LOW, 'maxRangePos': round(MAX_RANGE_POS, 4), 'minFunds': MIN_FUNDS, 'minBuybackPctMcap': MIN_BB_PCT, 'minJpyBuyback': MIN_JPY_BUYBACK, 'buybackGate': f'buyback-only needs Health {MIN_HEALTH}+ or 12m FCF >= 50% of the buyback', 'healthMin': MIN_HEALTH_ALL, 'insiderNetSellDays': NET_SELL_DAYS},
+    'rules': {'windowDays': WINDOW, 'minInsiderUsd': MIN_USD, 'minInsiderUsdIntl': MIN_USD_INTL, 'maxFromLowPct': MAX_FROM_LOW, 'maxRangePos': round(MAX_RANGE_POS, 4), 'minFunds': MIN_FUNDS, 'minBuybackPctMcap': MIN_BB_PCT, 'minJpyBuyback': MIN_JPY_BUYBACK, 'buybackGate': f'buyback-only needs Health {MIN_HEALTH}+ or 12m FCF >= 50% of the buyback', 'healthMin': MIN_HEALTH_ALL, 'insiderNetSellDays': NET_SELL_DAYS, 'smartMoneyNotLeaving': True, 'noFunds': True, 'insiderPriceInRange': True},
     'gated': gated,
     'total': len(out), 'passed': passed, 'show': SHOW, 'stocks': out,
     'intlLedger': sorted(ledger.values(), key=lambda r: r['date']),

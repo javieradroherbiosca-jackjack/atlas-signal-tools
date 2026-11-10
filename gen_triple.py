@@ -51,6 +51,17 @@ J = lambda f, d=None: json.load(open(f)) if os.path.exists(f) else d
 buys = J('pbuys.json', [])   # new FMP P-Purchase rows (only the last ~10 days are needed: older ones come from the ledger)
 cross = J('cross.json')['holdings']
 uni = J('universe.json')
+# 10 Nov 2026 (Javier): signal 3 can also be the analysts' view: an average target 25%+ above the price (3+ analysts)
+# counts like being near the low, whatever the distance from the low. Read from the screener rows (universe-full.json).
+MIN_UPSIDE, MIN_ANALYSTS = 25.0, 3
+UPS = {}
+if os.path.exists('universe-full.json'):
+    for _r in json.load(open('universe-full.json')):
+        try:
+            if float(_r.get('upside') or 0) >= MIN_UPSIDE and int(_r.get('numAnalysts') or 0) >= MIN_ANALYSTS and not _r.get('targetSuspicious'):
+                UPS[_r['ticker']] = (round(float(_r['upside']), 1), int(_r['numAnalysts']))
+        except (TypeError, ValueError):
+            pass
 an = J('analysts.json', {})
 qt = J('quotes.json', {})
 jp_bb = (J('jp-buybacks.json', {}) or {}).get('companies', [])   # backend /api/japan/buybacks
@@ -342,6 +353,10 @@ for sym, a in agg.items():
     fl = (p / lo - 1) * 100
     rpos = (p - lo) / (hi - lo) if hi > lo else 0
     tier = next((t for t, sm, mfl, mrp in LADDER if sm == has_sm and fl <= mfl and rpos <= mrp), None)
+    ups = UPS.get(sym)
+    price_sig = 'low'
+    if ups and (tier is None or tier not in (1, len(_STEPS) + 1)):   # analysts' upside 25%+ = signal 3 met at the strict step
+        tier, price_sig = (1 if has_sm else len(_STEPS) + 1), 'upside'
     if tier is None:
         continue
     if not has_sm:
@@ -367,7 +382,8 @@ for sym, a in agg.items():
         'funds': len(hs),
         'holders': [{'fundId': x['fundId'], 'manager': x.get('manager'), 'fundName': x.get('fundName'), **({'stakePct': x['stakePct']} if x.get('stakePct') else {})} for x in hs],
         'analysts': an.get(sym),
-        'tier': tier,
+        'tier': tier, 'priceSignal': price_sig,
+        **({'upside': ups[0], 'numAnalysts': ups[1]} if ups else {}),
     }
     if tier > len(_STEPS):
         row['doubleSignal'] = True
@@ -417,7 +433,7 @@ if len(out) >= 12:
         out.remove(r)
 res = {
     'asOf': today.isoformat(),
-    'rules': {'windowDays': WINDOW, 'minInsiderUsd': MIN_USD, 'minInsiderUsdIntl': MIN_USD_INTL, 'maxFromLowPct': MAX_FROM_LOW, 'maxRangePos': round(MAX_RANGE_POS, 4), 'minFunds': MIN_FUNDS, 'minBuybackPctMcap': MIN_BB_PCT, 'minJpyBuyback': MIN_JPY_BUYBACK, 'buybackGate': f'buyback-only needs Health {MIN_HEALTH}+ or 12m FCF >= 50% of the buyback', 'healthMin': MIN_HEALTH_ALL, 'insiderNetSellDays': NET_SELL_DAYS, 'smartMoneyNotLeaving': True, 'noFunds': True, 'insiderPriceInRange': True, 'ladder': [{'tier': t, 'smartMoney': sm, 'maxFromLowPct': m, 'maxRangePos': round(r, 4)} for t, sm, m, r in LADDER]},
+    'rules': {'windowDays': WINDOW, 'minInsiderUsd': MIN_USD, 'minInsiderUsdIntl': MIN_USD_INTL, 'maxFromLowPct': MAX_FROM_LOW, 'maxRangePos': round(MAX_RANGE_POS, 4), 'minFunds': MIN_FUNDS, 'minBuybackPctMcap': MIN_BB_PCT, 'minJpyBuyback': MIN_JPY_BUYBACK, 'buybackGate': f'buyback-only needs Health {MIN_HEALTH}+ or 12m FCF >= 50% of the buyback', 'healthMin': MIN_HEALTH_ALL, 'insiderNetSellDays': NET_SELL_DAYS, 'smartMoneyNotLeaving': True, 'noFunds': True, 'insiderPriceInRange': True, 'orAnalystUpsidePct': MIN_UPSIDE, 'minAnalysts': MIN_ANALYSTS, 'ladder': [{'tier': t, 'smartMoney': sm, 'maxFromLowPct': m, 'maxRangePos': round(r, 4)} for t, sm, m, r in LADDER]},
     'tierCounts': tier_counts, 'planB': strict_n < SHOW, 'target': TARGET,
     'gated': gated,
     'total': len(out), 'passed': passed, 'show': SHOW, 'stocks': out,

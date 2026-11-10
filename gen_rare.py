@@ -11,6 +11,11 @@ Atlas finds on its own, often before the great investors. Rules (refine as names
   * one row per company (same name under two tickers counts once: the home-market ticker wins)
   * ranked by the Momentum pillar of Atlas Health; cyclicals (Basic Materials, Energy) count 0.6x so they do not take
     over the list, but they are never excluded
+  * one-offs (Javier, 10 Nov 2026: "hay que vigilar que haya un repunte de caja libre por una venta extraordinaria"):
+    free cash flow must be positive in at least 2 of the last 3 years; if the latest year is more than 2.5x the 3-year
+    median, the FCF yield is recomputed on that median and must still pass; and earnings boosted by non-operating
+    gains (pre-tax profit more than 25% above operating profit, and 20+ points above the company's own 3-year average)
+    are left out, because the P/E would be flattering a one-off
   * at least 12, ideally 24: if fewer than 24 pass, widen step by step (P/E up to 12, then FCF down to 5%); health and
     the Quality Scores never relax. Each row carries its step ("tier").
 
@@ -109,6 +114,42 @@ def main(day):
     with cf.ThreadPoolExecutor(6) as ex:
         pool = list(ex.map(health, pool))
     pool = [r for r in pool if (r.get('_hs') or 0) >= 55]
+
+    # one-offs: an asset sale or another extraordinary item must not make a company look cheap or cash-rich
+    def oneoff(r):
+        d = get('/api/company/' + urllib.parse.quote(r['ticker']) + '/full', timeout=90) or {}
+        ca = [f(x.get('fcf')) for x in (d.get('cashAnnual') or [])[:3]]
+        ia = (d.get('incomeAnnual') or [])[:4]
+        r['_fcfN'], r['_why'] = f(r.get('fcfYield')), None
+        ca = [x for x in ca if x is not None]
+        if len(ca) >= 3:
+            if sum(1 for x in ca if x > 0) < 2:
+                r['_why'] = 'free cash flow negative in 2 of the last 3 years'
+            else:
+                med = sorted(ca)[1]
+                if med > 0 and ca[0] > 2.5 * med:
+                    r['_fcfN'] = r['_fcfN'] * med / ca[0]
+                    r['_spike'] = round(ca[0] / med, 1)
+        sh = []
+        for x in ia:
+            pt, op = f(x.get('pretax')), f(x.get('op'))
+            sh.append((pt - op) / abs(pt) if pt and op is not None else None)
+        if sh and sh[0] is not None and sh[0] > 0.25:
+            prev = [x for x in sh[1:] if x is not None]
+            if not prev or sh[0] - sum(prev) / len(prev) > 0.20:
+                r['_why'] = 'profit boosted by non-operating gains ({:.0%} of pre-tax profit)'.format(sh[0])
+        return r
+    with cf.ThreadPoolExecutor(6) as ex:
+        pool = list(ex.map(oneoff, pool))
+    for r in pool:
+        if r.get('_why'):
+            print('one-off:', r['ticker'], r['_why'])
+        elif r.get('_spike'):
+            print('one-off: {} FCF {}x its 3-year median, yield {:.1%} -> {:.1%}'.format(r['ticker'], r['_spike'], f(r['fcfYield']), r['_fcfN']))
+    pool = [r for r in pool if not r.get('_why')]
+    for r in pool:   # re-check the step with the normalised FCF yield
+        r['_tier'] = next((tr for tr, mpe, mfcf in STEPS if f(r['pe']) <= mpe and (r['_fcfN'] or 0) >= mfcf), None)
+    pool = [r for r in pool if r['_tier']]
     out, counts = [], {}
     for tr, *_ in STEPS:
         if len(out) >= TARGET:
@@ -130,7 +171,8 @@ def main(day):
         stocks.append({
             'ticker': r['ticker'], 'name': r.get('name'), 'country': r.get('country'), 'sector': r.get('sector'),
             'industry': r.get('industry'), 'marketCap': f(r['marketCap']), 'price': p, 'yearLow': lo, 'yearHigh': hi,
-            'fromLow': round((p / lo - 1) * 100, 1), 'pe': round(f(r['pe']), 2), 'fcfYield': round(f(r['fcfYield']), 4),
+            'fromLow': round((p / lo - 1) * 100, 1), 'pe': round(f(r['pe']), 2), 'fcfYield': round(r['_fcfN'], 4),
+            'fcfYieldReported': round(f(r['fcfYield']), 4), 'fcfSpike': r.get('_spike'),
             'roic': round(f(r['roic']), 4), 'revenueGrowth': round(f(r['revenueGrowth']), 4),
             'health': r.get('_hs'), 'healthLabel': r.get('_hl'), 'momentum': r.get('_mom'),
             'piotroski': f(r.get('piotroski')), 'altman': f(r.get('altman')), 'beneish': f(r.get('beneish')),
@@ -139,7 +181,8 @@ def main(day):
     res = {'asOf': day, 'total': len(stocks), 'tierCounts': counts, 'planB': counts.get(1, 0) < TARGET,
            'rules': {'minMarketCap': 750e6, 'pe': [5, 10], 'fcfYieldMin': 0.06, 'roicMin': 0.10, 'revenueGrowth': [0, 0.5],
                      'healthMin': 55, 'maxFromLowPct': 50, 'quality': 'Piotroski>=6, Altman>=1.81, Beneish<-1.78 (EM: 7, 2.6, -2.22)',
-                     'rank': 'Momentum pillar; cyclicals x0.6', 'ladder': [{'tier': t, 'maxPE': a, 'minFcf': b} for t, a, b in STEPS],
+                     'rank': 'Momentum pillar; cyclicals x0.6',
+                     'oneOffs': 'FCF positive 2 of 3 years; FCF > 2.5x 3-year median is normalised; non-operating gains > 25% of pre-tax profit (20+ pts above own average) excluded', 'ladder': [{'tier': t, 'maxPE': a, 'minFcf': b} for t, a, b in STEPS],
                      'target': TARGET, 'min': MIN_N, 'noFinancials': True, 'noFunds': True},
            'stocks': stocks}
     json.dump(res, open('rare-opportunity.json', 'w'), indent=1)

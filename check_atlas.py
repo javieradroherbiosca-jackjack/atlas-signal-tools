@@ -78,9 +78,13 @@ if ts:
         if not (lo * 0.98 <= p <= hi * 1.02): err(w, f'price {p} outside its 52w range {lo}–{hi}')
         fl = (p / lo - 1) * 100
         if abs(fl - (r.get('fromLow') or 0)) > 0.6: err(w, f"fromLow {r.get('fromLow')} ≠ computed {fl:.1f}")
-        if fl > maxlow + 0.05: err(w, f'{fl:.1f}% above the low (rule: ≤ {maxlow}%)')
-        if hi > lo and (p - lo) / (hi - lo) > rules.get('maxRangePos', 1 / 3) + 0.005: err(w, f'{(p - lo) / (hi - lo) * 100:.0f}% of its 52w range (rule: lower third)')
-        if (r.get('funds') or 0) < 1 or not r.get('holders'): err(w, 'no Smart Money holder')
+        # 10 Nov 2026: plan B ladder — each row is checked against the step it entered by ('tier')
+        step = next((x for x in rules.get('ladder', []) if x.get('tier') == r.get('tier')), None) or \
+            {'maxFromLowPct': maxlow, 'maxRangePos': rules.get('maxRangePos', 1 / 3), 'smartMoney': True}
+        if fl > step['maxFromLowPct'] + 0.05: err(w, f"{fl:.1f}% above the low (rule for tier {r.get('tier', 1)}: ≤ {step['maxFromLowPct']}%)")
+        if hi > lo and (p - lo) / (hi - lo) > step['maxRangePos'] + 0.005: err(w, f'{(p - lo) / (hi - lo) * 100:.0f}% of its 52w range (rule: lower third)')
+        if step.get('smartMoney', True) and ((r.get('funds') or 0) < 1 or not r.get('holders')): err(w, 'no Smart Money holder')
+        if not step.get('smartMoney', True) and not r.get('doubleSignal'): err(w, 'tier without Smart Money but not flagged doubleSignal')
         for h in r.get('holders', []):
             if not (h.get('manager') or h.get('fundName')): err(w, f"holder without a name ({h.get('fundId')})")
         suf = '.' + t.split('.')[-1] if '.' in t else ''

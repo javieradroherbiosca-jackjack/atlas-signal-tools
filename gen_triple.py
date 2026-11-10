@@ -23,7 +23,18 @@ MIN_USD_INTL = 250_000       # other markets (MAR / national regulators): inside
 MAX_FROM_LOW = 20.0   # 20% since 24 Oct 2026 (Javier: one rule across Atlas)
 MAX_RANGE_POS = 1 / 3   # 30 Oct 2026 (Javier, BATS): also in the lower third of its 52-week range
 MIN_FUNDS = 1
-SHOW = 12
+# 10 Nov 2026 (Javier): plan B so the list never runs dry. Signal 1 (insiders / company buyback) and the quality
+# gates never relax. If fewer than TARGET names pass the strict rules, the list is filled step by step, first
+# widening the distance from the 52-week low (up to 50%: in a strong market few stocks sit near their lows, and
+# one with ~50% of potential is still interesting), then adding Smart Money candidates (no Atlas manager yet, but
+# they meet what the best managers look for). The lower third of the 52-week range is never relaxed (Javier: a
+# stock that barely moves, sitting near its yearly high, is not "near its low"):
+#   tiers 1-4  Smart Money, <= 20 / 30 / 40 / 50% above the low, lower third of the 52-week range
+#   tiers 5-8  the same four steps without an Atlas manager yet ("Smart Money candidate", doubleSignal)
+_STEPS = [(20.0, 1 / 3), (30.0, 1 / 3), (40.0, 1 / 3), (50.0, 1 / 3)]
+LADDER = [(i + 1, True, m, r) for i, (m, r) in enumerate(_STEPS)] + [(i + 1 + len(_STEPS), False, m, r) for i, (m, r) in enumerate(_STEPS)]
+SHOW = 12     # minimum on the page, always (Javier, 10 Nov 2026)
+TARGET = 24   # ideal size, so Today's Picks can rotate: the ladder keeps widening until it reaches this
 SM_ALIAS = {}  # {insider ticker: ticker the funds hold} when they differ
 KEY_FIX = {'DAN.MI': 'DANR.MI'}  # feed reports Danieli savings-share buys under the ordinary ticker
 SUF = {'XNSE': '.NS', 'XBOM': '.BO', 'XLON': '.L', 'XTSX': '.V', 'XPAR': '.PA', 'XTSE': '.TO', 'MTAA': '.MI', 'XMIL': '.MI',
@@ -317,18 +328,25 @@ for sym, a in agg.items():
     hsym = SM_ALIAS.get(sym, sym)
     ins_ok = not a.get('buyback') and a['usd'] >= (MIN_USD_INTL if intl else MIN_USD)
     bb = a.get('bbq')
-    if not (ins_ok or a.get('buyback') or bb) or hsym not in holders or len(holders[hsym]) < MIN_FUNDS:
+    if not (ins_ok or a.get('buyback') or bb):
         continue
-    needs['candidates'].append(sym)
+    has_sm = hsym in holders and len(holders[hsym]) >= MIN_FUNDS
     u = dict(uni.get(sym) or {}); u.update({k: v for k, v in (qt.get(sym) or {}).items() if v})
     p, lo, hi = u.get('price'), u.get('yearLow'), u.get('yearHigh')
+    if has_sm:
+        needs['candidates'].append(sym)
     if not (p and lo and hi) or lo <= 0:
-        needs['quotes'].append(sym)
+        if has_sm:
+            needs['quotes'].append(sym)
         continue
     fl = (p / lo - 1) * 100
-    if fl > MAX_FROM_LOW or (hi > lo and (p - lo) / (hi - lo) > MAX_RANGE_POS):
+    rpos = (p - lo) / (hi - lo) if hi > lo else 0
+    tier = next((t for t, sm, mfl, mrp in LADDER if sm == has_sm and fl <= mfl and rpos <= mrp), None)
+    if tier is None:
         continue
-    hs = sorted(holders[hsym], key=lambda x: -(x.get('value') or 0))
+    if not has_sm:
+        needs['candidates'].append(sym)   # Double Signal names: refresh their quotes too
+    hs = sorted(holders[hsym], key=lambda x: -(x.get('value') or 0)) if has_sm else []
     market = 'JP' if sym.endswith('.T') else ('INTL' if intl else 'US')
     if ins_ok or a.get('buyback'):   # insider buys (or Japan's monthly buyback reports)
         top = sorted(a['people'].items(), key=lambda kv: -kv[1])
@@ -349,7 +367,10 @@ for sym, a in agg.items():
         'funds': len(hs),
         'holders': [{'fundId': x['fundId'], 'manager': x.get('manager'), 'fundName': x.get('fundName'), **({'stakePct': x['stakePct']} if x.get('stakePct') else {})} for x in hs],
         'analysts': an.get(sym),
+        'tier': tier,
     }
+    if tier > len(_STEPS):
+        row['doubleSignal'] = True
     if bb:
         row['buyback'] = bb
     out.append(row)
@@ -363,7 +384,7 @@ for t, hs in holders.items():
         continue
     u = dict(uni.get(t) or {}); u.update({k: v for k, v in (qt.get(t) or {}).items() if v})
     p, lo = u.get('price'), u.get('yearLow')
-    if p and lo and lo > 0 and (p / lo - 1) * 100 <= MAX_FROM_LOW:
+    if p and lo and lo > 0 and (p / lo - 1) * 100 <= max(m for _, _, m, _ in LADDER):   # plan B looks up to 50%
         _bbc.append(t)
 needs['buyback_check'] = sorted(_bbc)
 # register-held names the screener doesn't carry (Paris): ask for their quotes, then they enter the checks above
@@ -372,18 +393,31 @@ json.dump(needs, open('needs.json', 'w'))
 # 30 Oct 2026: buyback-only names must afford the buyback (Health 50+ or 12m FCF >= half of it); adds 'health' to every row
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from triple_gate import gate, MIN_HEALTH, MIN_HEALTH_ALL, NET_SELL_DAYS
-out, gated = gate(out)
-out.sort(key=lambda r: (-r['funds'], -r['insiderUsd']))
+_kept, gated, tier_counts = [], [], {}
+for _t, *_ in LADDER:
+    if len(_kept) >= TARGET:
+        break   # enough names: lower tiers are not used (nor gated)
+    _k, _d = gate([r for r in out if r['tier'] == _t])
+    _kept += _k; gated += _d; tier_counts[_t] = len(_k)
+out = _kept
 passed = len(out)
+strict_n = tier_counts.get(1, 0)
+if strict_n < TARGET:
+    # Plan B: strict names first, then the nearest tiers, strongest first, up to TARGET.
+    out.sort(key=lambda r: (r['tier'], -r['funds'], -r['insiderUsd']))
+    out = out[:TARGET]
+out.sort(key=lambda r: (r['tier'] > 1, -r['funds'], -r['insiderUsd']))
 # Publish a multiple of 12 (fills 4, 3, 2 or 1 columns with no empty cells): keep the strongest.
 if len(out) >= 12:
     # Trim from the weakest US names first, so the few international ones aren't the ones cut.
     drop = len(out) - len(out) // 12 * 12
-    for r in sorted([r for r in out if r['market'] == 'US'], key=lambda r: (r['funds'], r['insiderUsd']))[:drop]:
+    # (lowest tier first; within a tier, US before international names)
+    for r in sorted(out, key=lambda r: (-r['tier'], r['market'] != 'US', r['funds'], r['insiderUsd']))[:drop]:
         out.remove(r)
 res = {
     'asOf': today.isoformat(),
-    'rules': {'windowDays': WINDOW, 'minInsiderUsd': MIN_USD, 'minInsiderUsdIntl': MIN_USD_INTL, 'maxFromLowPct': MAX_FROM_LOW, 'maxRangePos': round(MAX_RANGE_POS, 4), 'minFunds': MIN_FUNDS, 'minBuybackPctMcap': MIN_BB_PCT, 'minJpyBuyback': MIN_JPY_BUYBACK, 'buybackGate': f'buyback-only needs Health {MIN_HEALTH}+ or 12m FCF >= 50% of the buyback', 'healthMin': MIN_HEALTH_ALL, 'insiderNetSellDays': NET_SELL_DAYS, 'smartMoneyNotLeaving': True, 'noFunds': True, 'insiderPriceInRange': True},
+    'rules': {'windowDays': WINDOW, 'minInsiderUsd': MIN_USD, 'minInsiderUsdIntl': MIN_USD_INTL, 'maxFromLowPct': MAX_FROM_LOW, 'maxRangePos': round(MAX_RANGE_POS, 4), 'minFunds': MIN_FUNDS, 'minBuybackPctMcap': MIN_BB_PCT, 'minJpyBuyback': MIN_JPY_BUYBACK, 'buybackGate': f'buyback-only needs Health {MIN_HEALTH}+ or 12m FCF >= 50% of the buyback', 'healthMin': MIN_HEALTH_ALL, 'insiderNetSellDays': NET_SELL_DAYS, 'smartMoneyNotLeaving': True, 'noFunds': True, 'insiderPriceInRange': True, 'ladder': [{'tier': t, 'smartMoney': sm, 'maxFromLowPct': m, 'maxRangePos': round(r, 4)} for t, sm, m, r in LADDER]},
+    'tierCounts': tier_counts, 'planB': strict_n < TARGET, 'target': TARGET,
     'gated': gated,
     'total': len(out), 'passed': passed, 'show': SHOW, 'stocks': out,
     'intlLedger': sorted(ledger.values(), key=lambda r: r['date']),

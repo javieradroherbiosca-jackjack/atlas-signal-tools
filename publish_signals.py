@@ -5,7 +5,8 @@ Since 30 Oct 2026 both files are rebuilt every day and served by the backend at
 (the Terminal and the Screener read them there; the static copies on Netlify are only a fallback),
 so publishing them no longer needs a Netlify deploy.
 
-Usage: python3 publish_signals.py TOKEN [triple-signal.json] [signals.json]
+Usage: python3 publish_signals.py TOKEN [triple-signal.json] [signals.json] [rare-opportunity.json]
+(10 Nov 2026: the optional fourth file is Rare Opportunity, built by gen_rare.py; at least 12 stocks)
 The backend rejects a file without asOf, with fewer than 12 stocks or 200 rows, or without usLedger,
 and keeps the previous version as <name>.prev. Exit code 0 = both published and verified.
 """
@@ -40,6 +41,8 @@ if __name__ == '__main__':
     tok = sys.argv[1]
     files = {'triple-signal': sys.argv[2] if len(sys.argv) > 2 else 'triple-signal.json',
              'signals': sys.argv[3] if len(sys.argv) > 3 else 'signals.json'}
+    if len(sys.argv) > 4:
+        files['rare-opportunity'] = sys.argv[4]
     for name, path in files.items():
         r = post(name, path, tok)
         want = json.load(open(path)).get('asOf')

@@ -16,7 +16,7 @@ Atlas finds on its own, often before the great investors. Rules (refine as names
     median, the FCF yield is recomputed on that median and must still pass; and earnings boosted by non-operating
     gains (pre-tax profit more than 25% above operating profit, and 20+ points above the company's own 3-year average)
     are left out, because the P/E would be flattering a one-off
-  * at least 12, ideally 24: if fewer than 24 pass, widen step by step (P/E up to 12, then FCF down to 5%); health and
+  * at least 12: only if fewer than 12 pass, widen step by step (P/E up to 12, then FCF down to 5%); health and
     the Quality Scores never relax. Each row carries its step ("tier").
 
 Usage: python3 gen_rare.py AAAA-MM-DD  → rare-opportunity.json (publish with publish_signals.py).
@@ -152,7 +152,7 @@ def main(day):
     pool = [r for r in pool if r['_tier']]
     out, counts = [], {}
     for tr, *_ in STEPS:
-        if len(out) >= TARGET:
+        if len(out) >= MIN_N:   # 10 Nov 2026 (Javier): widen only while fewer than 12 pass
             break
         add = [r for r in pool if r['_tier'] == tr]
         counts[tr] = len(add)
@@ -162,8 +162,8 @@ def main(day):
         m = r.get('_mom') or 0
         return m * (0.6 if r.get('sector') in CYCLICAL else 1.0)
     out.sort(key=lambda r: (r['_tier'], -score(r), -(f(r.get('fcfYield')) or 0)))
-    if len(out) > TARGET and counts.get(1, 0) < TARGET:
-        out = out[:TARGET]
+    if counts.get(1, 0) < MIN_N:   # widened: only as many as needed to reach 12 (Javier: "lo mínimo posible")
+        out = out[:MIN_N]
     out.sort(key=lambda r: (-score(r), -(f(r.get('fcfYield')) or 0)))
     stocks = []
     for r in out:
@@ -178,7 +178,7 @@ def main(day):
             'piotroski': f(r.get('piotroski')), 'altman': f(r.get('altman')), 'beneish': f(r.get('beneish')),
             'cyclical': r.get('sector') in CYCLICAL, 'smallCap': f(r['marketCap']) < 1e9, 'tier': r['_tier'],
         })
-    res = {'asOf': day, 'total': len(stocks), 'tierCounts': counts, 'planB': counts.get(1, 0) < TARGET,
+    res = {'asOf': day, 'total': len(stocks), 'tierCounts': counts, 'planB': counts.get(1, 0) < MIN_N,
            'rules': {'minMarketCap': 750e6, 'pe': [5, 10], 'fcfYieldMin': 0.06, 'roicMin': 0.10, 'revenueGrowth': [0, 0.5],
                      'healthMin': 55, 'maxFromLowPct': 50, 'quality': 'Piotroski>=6, Altman>=1.81, Beneish<-1.78 (EM: 7, 2.6, -2.22)',
                      'rank': 'Momentum pillar; cyclicals x0.6',

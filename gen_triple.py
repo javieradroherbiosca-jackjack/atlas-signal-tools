@@ -24,7 +24,7 @@ MAX_FROM_LOW = 20.0   # 20% since 24 Oct 2026 (Javier: one rule across Atlas)
 MAX_RANGE_POS = 1 / 3   # 30 Oct 2026 (Javier, BATS): also in the lower third of its 52-week range
 MIN_FUNDS = 1
 # 10 Nov 2026 (Javier): plan B so the list never runs dry. Signal 1 (insiders / company buyback) and the quality
-# gates never relax. If fewer than TARGET names pass the strict rules, the list is filled step by step, first
+# gates never relax. If fewer than 12 (SHOW) names pass the strict rules, the list is filled step by step, first
 # widening the distance from the 52-week low (up to 50%: in a strong market few stocks sit near their lows, and
 # one with ~50% of potential is still interesting), then adding Smart Money candidates (no Atlas manager yet, but
 # they meet what the best managers look for). The lower third of the 52-week range is never relaxed (Javier: a
@@ -34,7 +34,7 @@ MIN_FUNDS = 1
 _STEPS = [(20.0, 1 / 3), (30.0, 1 / 3), (40.0, 1 / 3), (50.0, 1 / 3)]
 LADDER = [(i + 1, True, m, r) for i, (m, r) in enumerate(_STEPS)] + [(i + 1 + len(_STEPS), False, m, r) for i, (m, r) in enumerate(_STEPS)]
 SHOW = 12     # minimum on the page, always (Javier, 10 Nov 2026)
-TARGET = 24   # ideal size, so Today's Picks can rotate: the ladder keeps widening until it reaches this
+TARGET = 24   # most names a widened list keeps; the ladder only widens while fewer than SHOW (12) pass (Javier, 10 Nov 2026)
 SM_ALIAS = {}  # {insider ticker: ticker the funds hold} when they differ
 KEY_FIX = {'DAN.MI': 'DANR.MI'}  # feed reports Danieli savings-share buys under the ordinary ticker
 SUF = {'XNSE': '.NS', 'XBOM': '.BO', 'XLON': '.L', 'XTSX': '.V', 'XPAR': '.PA', 'XTSE': '.TO', 'MTAA': '.MI', 'XMIL': '.MI',
@@ -395,17 +395,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from triple_gate import gate, MIN_HEALTH, MIN_HEALTH_ALL, NET_SELL_DAYS
 _kept, gated, tier_counts = [], [], {}
 for _t, *_ in LADDER:
-    if len(_kept) >= TARGET:
-        break   # enough names: lower tiers are not used (nor gated)
+    if len(_kept) >= SHOW:
+        break   # 10 Nov 2026 (Javier): widen only while fewer than 12 pass; lower tiers are not used (nor gated)
     _k, _d = gate([r for r in out if r['tier'] == _t])
     _kept += _k; gated += _d; tier_counts[_t] = len(_k)
 out = _kept
 passed = len(out)
 strict_n = tier_counts.get(1, 0)
-if strict_n < TARGET:
-    # Plan B: strict names first, then the nearest tiers, strongest first, up to TARGET.
+if strict_n < SHOW:
+    # Plan B (only when fewer than 12 pass the strict rules): all strict names, then only as many of the nearest
+    # tiers as needed to reach 12, strongest first (Javier, 10 Nov 2026: "lo mínimo posible")
     out.sort(key=lambda r: (r['tier'], -r['funds'], -r['insiderUsd']))
-    out = out[:TARGET]
+    out = out[:SHOW]
 out.sort(key=lambda r: (r['tier'] > 1, -r['funds'], -r['insiderUsd']))
 # Publish a multiple of 12 (fills 4, 3, 2 or 1 columns with no empty cells): keep the strongest.
 if len(out) >= 12:
@@ -417,7 +418,7 @@ if len(out) >= 12:
 res = {
     'asOf': today.isoformat(),
     'rules': {'windowDays': WINDOW, 'minInsiderUsd': MIN_USD, 'minInsiderUsdIntl': MIN_USD_INTL, 'maxFromLowPct': MAX_FROM_LOW, 'maxRangePos': round(MAX_RANGE_POS, 4), 'minFunds': MIN_FUNDS, 'minBuybackPctMcap': MIN_BB_PCT, 'minJpyBuyback': MIN_JPY_BUYBACK, 'buybackGate': f'buyback-only needs Health {MIN_HEALTH}+ or 12m FCF >= 50% of the buyback', 'healthMin': MIN_HEALTH_ALL, 'insiderNetSellDays': NET_SELL_DAYS, 'smartMoneyNotLeaving': True, 'noFunds': True, 'insiderPriceInRange': True, 'ladder': [{'tier': t, 'smartMoney': sm, 'maxFromLowPct': m, 'maxRangePos': round(r, 4)} for t, sm, m, r in LADDER]},
-    'tierCounts': tier_counts, 'planB': strict_n < TARGET, 'target': TARGET,
+    'tierCounts': tier_counts, 'planB': strict_n < SHOW, 'target': TARGET,
     'gated': gated,
     'total': len(out), 'passed': passed, 'show': SHOW, 'stocks': out,
     'intlLedger': sorted(ledger.values(), key=lambda r: r['date']),

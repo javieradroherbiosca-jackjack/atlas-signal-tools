@@ -1,5 +1,5 @@
 """Category size check (Javier, 10 Nov 2026): every Today's Picks category must show at least 12 companies and,
-ideally, 24 on average, so the daily picks can rotate.
+shows up to 24 (rules widen only while fewer than 12 pass).
 
 Opens https://atlasglobalterminal.com in a headless browser, waits for the lists to fill and counts the cards of each
 category. Exit code 0 = all categories >= 12; 1 = some category below 12 (ERROR lines); 2 = could not run.
@@ -34,7 +34,7 @@ async def main():
     avg = sum(capped.values()) / len(capped)
     for k, v in counts.items():
         print(('ERROR ' if v < MIN else 'ok    ') + f'{k}: {v}')
-    print(f'average (each capped at {TARGET}): {avg:.1f} · target {TARGET}' + ('' if avg >= TARGET - 4 else ' · WARN below target'))
+    print(f'average (each capped at {TARGET}): {avg:.1f}')
     return 1 if bad else 0
 
 if __name__ == '__main__':

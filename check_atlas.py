@@ -81,8 +81,12 @@ if ts:
         # 10 Nov 2026: plan B ladder — each row is checked against the step it entered by ('tier')
         step = next((x for x in rules.get('ladder', []) if x.get('tier') == r.get('tier')), None) or \
             {'maxFromLowPct': maxlow, 'maxRangePos': rules.get('maxRangePos', 1 / 3), 'smartMoney': True}
-        if fl > step['maxFromLowPct'] + 0.05: err(w, f"{fl:.1f}% above the low (rule for tier {r.get('tier', 1)}: ≤ {step['maxFromLowPct']}%)")
-        if hi > lo and (p - lo) / (hi - lo) > step['maxRangePos'] + 0.005: err(w, f'{(p - lo) / (hi - lo) * 100:.0f}% of its 52w range (rule: lower third)')
+        if r.get('priceSignal') == 'upside':   # 10 Nov 2026: analysts' target 25%+ above the price replaces "near the low"
+            if (r.get('upside') or 0) < rules.get('orAnalystUpsidePct', 25) or (r.get('numAnalysts') or 0) < rules.get('minAnalysts', 3):
+                err(w, f"upside signal without 25%+ upside from 3+ analysts ({r.get('upside')}%, {r.get('numAnalysts')})")
+        else:
+            if fl > step['maxFromLowPct'] + 0.05: err(w, f"{fl:.1f}% above the low (rule for tier {r.get('tier', 1)}: ≤ {step['maxFromLowPct']}%)")
+            if hi > lo and (p - lo) / (hi - lo) > step['maxRangePos'] + 0.005: err(w, f'{(p - lo) / (hi - lo) * 100:.0f}% of its 52w range (rule: lower third)')
         if step.get('smartMoney', True) and ((r.get('funds') or 0) < 1 or not r.get('holders')): err(w, 'no Smart Money holder')
         if not step.get('smartMoney', True) and not r.get('doubleSignal'): err(w, 'tier without Smart Money but not flagged doubleSignal')
         for h in r.get('holders', []):

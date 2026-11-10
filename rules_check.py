@@ -36,10 +36,10 @@ def rule(code, msg):
     bad.append(f'RULE {code}: {msg}')
 
 
-def near_low(p, lo, hi):
+def near_low(p, lo, hi, maxpct=20):
     if not (p and lo and hi and lo > 0 and hi > lo):
         return None
-    return (p / lo - 1) * 100 <= 20.05 and (p - lo) / (hi - lo) <= 1 / 3 + 0.005
+    return (p / lo - 1) * 100 <= maxpct + 0.05 and (p - lo) / (hi - lo) <= 1 / 3 + 0.005
 
 
 try:
@@ -49,6 +49,12 @@ try:
     if age > 1:
         rule('R1', f"Triple Signal asOf {ts['asOf']} ({age} days old; it must be rebuilt every day)")
     for s in ts.get('stocks', []):
+        if s.get('priceSignal') == 'upside':   # 10 Nov 2026: analysts' target 25%+ above the price instead of near the low
+            if (s.get('upside') or 0) < 25 or (s.get('numAnalysts') or 0) < 3:
+                rule('R1', f"{s.get('name')} ({s['ticker']}) is in by analysts' upside but has {s.get('upside')}% from {s.get('numAnalysts')} analysts")
+            continue
+        if (s.get('tier') or 1) > 1:   # plan B steps are checked by check_atlas.py against their own step
+            continue
         if near_low(s.get('price'), s.get('yearLow'), s.get('yearHigh')) is False:
             rule('R1', f"{s.get('name')} ({s['ticker']}) is not near its low ({s.get('fromLow')}% above it / upper part of its range)")
     tickers = {s['ticker'] for s in ts.get('stocks', [])}
@@ -63,8 +69,9 @@ try:
         hp = (today['picks'].get('health') or {}).get('t')
         if hp:
             q = (get(f'{API}/api/screener/lookup/{hp}') or {}).get('data') or {}
-            if near_low(q.get('price'), q.get('yearLow'), q.get('yearHigh')) is False:
-                rule('R2', f"today's Health Signal pick {hp} is not near its low")
+            up_ok = (q.get('upside') or 0) >= 25 and (q.get('numAnalysts') or 0) >= 3   # 10 Nov 2026: or analysts' upside 25%+
+            if near_low(q.get('price'), q.get('yearLow'), q.get('yearHigh'), 50) is False and not up_ok:
+                rule('R2', f"today's Health Signal pick {hp} is neither near its low nor 25%+ below the analysts' target")
     else:
         notes.append("no picks fixed yet today")
 

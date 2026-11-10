@@ -7,7 +7,7 @@ Atlas finds on its own, often before the great investors. Rules (refine as names
   * revenue growth 0-50% (bigger jumps are usually one-offs); Atlas Health >= 55 (Good or better)
   * Quality Scores: Piotroski >= 6, Altman Z >= 1.81, Beneish < -1.78; emerging markets, where accounting transparency
     is weaker, must pass stricter ones: Piotroski >= 7, Altman Z >= 2.6, Beneish < -2.22 (no country is excluded)
-  * price at most 50% above its 52-week low
+  * price at most 50% above its 52-week low, or the analysts' average target 25%+ above the price (3+ analysts)
   * one row per company (same name under two tickers counts once: the home-market ticker wins)
   * ranked by the Momentum pillar of Atlas Health; cyclicals (Basic Materials, Energy) count 0.6x so they do not take
     over the list, but they are never excluded
@@ -99,7 +99,11 @@ def main(day):
             continue
         if not (5 <= pe <= max(s[1] for s in STEPS)) or not (min(s[2] for s in STEPS) <= fcf <= 0.40) or roic < 0.10 or not (0 <= rg <= 0.50):
             continue
-        if (p / lo - 1) * 100 > 50 or not quality_ok(r):
+        # price: at most 50% above the 52-week low, OR (10 Nov 2026, Javier) the analysts' average target 25%+ above the
+        # price with 3+ analysts, whatever the distance from the low
+        up = f(r.get('upside')) or 0; na = int(f(r.get('numAnalysts')) or 0)
+        r['_upOk'] = up >= 25 and na >= 3 and not r.get('targetSuspicious')
+        if ((p / lo - 1) * 100 > 50 and not r['_upOk']) or not quality_ok(r):
             continue
         tier = next((tr for tr, mpe, mfcf in STEPS if pe <= mpe and fcf >= mfcf), None)
         if tier:
@@ -176,11 +180,13 @@ def main(day):
             'roic': round(f(r['roic']), 4), 'revenueGrowth': round(f(r['revenueGrowth']), 4),
             'health': r.get('_hs'), 'healthLabel': r.get('_hl'), 'momentum': r.get('_mom'),
             'piotroski': f(r.get('piotroski')), 'altman': f(r.get('altman')), 'beneish': f(r.get('beneish')),
+            'upside': f(r.get('upside')), 'numAnalysts': int(f(r.get('numAnalysts')) or 0) or None,
+            'priceSignal': 'low' if (p / lo - 1) * 100 <= 50 else 'upside',
             'cyclical': r.get('sector') in CYCLICAL, 'smallCap': f(r['marketCap']) < 1e9, 'tier': r['_tier'],
         })
     res = {'asOf': day, 'total': len(stocks), 'tierCounts': counts, 'planB': counts.get(1, 0) < MIN_N,
            'rules': {'minMarketCap': 750e6, 'pe': [5, 10], 'fcfYieldMin': 0.06, 'roicMin': 0.10, 'revenueGrowth': [0, 0.5],
-                     'healthMin': 55, 'maxFromLowPct': 50, 'quality': 'Piotroski>=6, Altman>=1.81, Beneish<-1.78 (EM: 7, 2.6, -2.22)',
+                     'healthMin': 55, 'maxFromLowPct': 50, 'orAnalystUpsidePct': 25, 'minAnalysts': 3, 'quality': 'Piotroski>=6, Altman>=1.81, Beneish<-1.78 (EM: 7, 2.6, -2.22)',
                      'rank': 'Momentum pillar; cyclicals x0.6',
                      'oneOffs': 'FCF positive 2 of 3 years; FCF > 2.5x 3-year median is normalised; non-operating gains > 25% of pre-tax profit (20+ pts above own average) excluded', 'ladder': [{'tier': t, 'maxPE': a, 'minFcf': b} for t, a, b in STEPS],
                      'target': TARGET, 'min': MIN_N, 'noFinancials': True, 'noFunds': True},

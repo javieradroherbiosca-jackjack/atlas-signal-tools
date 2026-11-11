@@ -47,10 +47,13 @@ async def run(base, tickers, out):
                 t = qq.get_nowait(); errs.clear()
                 try:
                     await pg.goto(f'{base}/stock/{t}#dcf', timeout=90000)
-                    try: await pg.wait_for_selector('#dcfOut .dk, #dcfOut .dwarn, #dcfInner .note', timeout=120000)
+                    # 11 Nov 2026: the Valuation tab now opens on a dashboard and the DCF/model sections are collapsed
+                    # (<details>), so wait for the elements to exist (not to be visible) and open the sections before reading
+                    try: await pg.wait_for_selector('#dcfOut .dk, #dcfOut .dwarn, #dcfInner .note', timeout=120000, state='attached')
                     except Exception: pass
+                    await pg.evaluate("document.querySelectorAll('details').forEach(d => d.open = true)")
                     await pg.wait_for_timeout(1500)
-                    try: await pg.wait_for_selector('#swotBody .swot', timeout=30000)
+                    try: await pg.wait_for_selector('#swotBody .swot', timeout=30000, state='attached')
                     except Exception: pass
                     r = await pg.evaluate(JS); r['t'] = t; r['errs'] = list(errs); res.append(r)
                 except Exception as e:

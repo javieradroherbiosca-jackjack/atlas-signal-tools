@@ -6,7 +6,7 @@ category. Exit code 0 = all categories >= 12; 1 = some category below 12 (ERROR 
 Usage: python3 count_check.py
 """
 import asyncio, json, sys
-GRIDS = {'Top conviction': '#opportunitiesGrid', 'Most owned': '#mostOwnedGrid', 'Triple Signal': '#tripleGrid', 'Undervalued': '#jewelsGrid',
+GRIDS = {'Top conviction': '#opportunitiesGrid', 'Most owned': '#mostOwnedGrid', 'New conviction': '#newConvGrid', 'Triple Signal': '#tripleGrid', 'Undervalued': '#jewelsGrid',
          'Small caps': '#lotteryGrid', 'International': '#internationalGrid', 'Near lows': '#lowsGrid',
          'Quality': '#qualityGridSm', 'Health Signal': ['#healthSmGrid', '#healthLgGrid'], 'Cash & Cheap': '#rareGrid'}
 MIN, TARGET = 12, 24

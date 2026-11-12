@@ -3,7 +3,7 @@
 Healthy, very cheap companies with strong free cash flow, ranked by Momentum. No Smart Money needed: these are ideas
 Atlas finds on its own, often before the great investors. Rules (refine as names come out):
   * market cap >= 750 M$; no funds / investment vehicles and no financials (FCF means nothing for banks and insurers)
-  * P/E 5-10 (below 5 there is almost always a one-off or a bad figure); FCF yield 6-40%; ROIC >= 10%
+  * P/E 3-10 (12 Nov 2026, Javier: floor lowered from 5; under 5 the web flags a possible value trap); FCF yield 6-40%; ROIC >= 10%
   * revenue growth 0-50% (bigger jumps are usually one-offs); Atlas Health >= 55 (Good or better)
   * Quality Scores: Piotroski >= 6, Altman Z >= 1.81, Beneish < -1.78; emerging markets, where accounting transparency
     is weaker, must pass stricter ones: Piotroski >= 7, Altman Z >= 2.6, Beneish < -2.22 (no country is excluded)
@@ -26,7 +26,7 @@ import json, os, sys, time, urllib.parse, urllib.request, concurrent.futures as 
 
 API = 'https://atlas-v2-jcsn.onrender.com'
 TARGET, MIN_N = 24, 12
-EXCLUDE = {'APH.JO'}   # Javier, 10 Nov 2026: Alphamin (Mauritius) out
+EXCLUDE = {'APH.JO', '3918.HK'}   # Javier: Alphamin (Mauritius) out, 10 Nov 2026; NagaCorp (casino in Cambodia) out, 12 Nov 2026
 EM = {'CN', 'HK', 'MO', 'BR', 'ZA', 'ID', 'IN', 'MY', 'TH', 'MX', 'TR', 'GR', 'PH', 'VN', 'AR', 'CL', 'CO', 'PE', 'EG', 'NG',
       'PK', 'SA', 'AE', 'QA', 'KW', 'MU', 'KZ', 'RU', 'TW', 'KR', 'PL', 'HU', 'CZ'}
 CYCLICAL = {'Basic Materials', 'Energy'}
@@ -97,7 +97,7 @@ def main(day):
             continue
         if r.get('sector') == 'Financial Services' or any(w in (r.get('name') or '').lower() for w in FUND_WORDS):
             continue
-        if not (5 <= pe <= max(s[1] for s in STEPS)) or not (min(s[2] for s in STEPS) <= fcf <= 0.40) or roic < 0.10 or not (0 <= rg <= 0.50):
+        if not (3 <= pe <= max(s[1] for s in STEPS)) or not (min(s[2] for s in STEPS) <= fcf <= 0.40) or roic < 0.10 or not (0 <= rg <= 0.50):
             continue
         # price: at most 50% above the 52-week low, OR (10 Nov 2026, Javier) the analysts' average target 25%+ above the
         # price with 3+ analysts, whatever the distance from the low
@@ -182,10 +182,10 @@ def main(day):
             'piotroski': f(r.get('piotroski')), 'altman': f(r.get('altman')), 'beneish': f(r.get('beneish')),
             'upside': f(r.get('upside')), 'numAnalysts': int(f(r.get('numAnalysts')) or 0) or None,
             'priceSignal': 'low' if (p / lo - 1) * 100 <= 50 else 'upside',
-            'cyclical': r.get('sector') in CYCLICAL, 'smallCap': f(r['marketCap']) < 1e9, 'tier': r['_tier'],
+            'cyclical': r.get('sector') in CYCLICAL, 'valueTrap': f(r['pe']) < 5 or f(r['fcfYield']) > 0.20, 'smallCap': f(r['marketCap']) < 1e9, 'tier': r['_tier'],
         })
     res = {'asOf': day, 'total': len(stocks), 'tierCounts': counts, 'planB': counts.get(1, 0) < MIN_N,
-           'rules': {'minMarketCap': 750e6, 'pe': [5, 10], 'fcfYieldMin': 0.06, 'roicMin': 0.10, 'revenueGrowth': [0, 0.5],
+           'rules': {'minMarketCap': 750e6, 'pe': [3, 10], 'valueTrapFlag': 'P/E < 5 or FCF yield > 20%', 'fcfYieldMin': 0.06, 'roicMin': 0.10, 'revenueGrowth': [0, 0.5],
                      'healthMin': 55, 'maxFromLowPct': 50, 'orAnalystUpsidePct': 25, 'minAnalysts': 3, 'quality': 'Piotroski>=6, Altman>=1.81, Beneish<-1.78 (EM: 7, 2.6, -2.22)',
                      'rank': 'Momentum pillar; cyclicals x0.6',
                      'oneOffs': 'FCF positive 2 of 3 years; FCF > 2.5x 3-year median is normalised; non-operating gains > 25% of pre-tax profit (20+ pts above own average) excluded', 'ladder': [{'tier': t, 'maxPE': a, 'minFcf': b} for t, a, b in STEPS],

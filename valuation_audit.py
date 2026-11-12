@@ -19,6 +19,11 @@ KNOWN = {
     ('SEM.LS', 'EV/SALES VS OWN HISTORY'): 'same',
     ('0001.HK', 'EARNINGS POWER VALUE'): 'conglomerate with associates and minorities',
     ('ENOG.L', 'EV/SALES VS OWN HISTORY'): 'revenue history changed with the Israel gas fields',
+    # 12 Nov 2026 (batch 4/7): reviewed, real readings, not data errors
+    ('NVO', 'EV/EBITDA VS OWN HISTORY'): 'ADR shown in DKK through NOVO-B.CO: same de-rating as NOVO-B.CO',
+    ('NVO', 'P/E VS OWN HISTORY'): 'same', ('NVO', 'EV/SALES VS OWN HISTORY'): 'same',
+    ('ADTN', 'COMPARABLE COMPANIES'): 'EV/EBITDA 6x after the 2023-25 collapse vs telecom-equipment peers ~15x+: cheap vs peers, analysts target ~2.7x the price',
+    ('OTEX', 'COMPARABLE COMPANIES'): 'P/E ~5.5 on TTM earnings lifted by divestiture gains vs software peers ~20x',
 }
 def n(s):
     m = re.search(r'(-?[\d,]+\.?\d*)', s or '')

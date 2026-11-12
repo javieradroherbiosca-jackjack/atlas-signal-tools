@@ -22,6 +22,7 @@ KNOWN = {
     # 12 Nov 2026 (batch 4/7): reviewed, real readings, not data errors
     ('NVO', 'EV/EBITDA VS OWN HISTORY'): 'ADR shown in DKK through NOVO-B.CO: same de-rating as NOVO-B.CO',
     ('NVO', 'P/E VS OWN HISTORY'): 'same', ('NVO', 'EV/SALES VS OWN HISTORY'): 'same',
+    ('OTEX', 'COMPARABLE COMPANIES'): 'TTM P/E ~9.5x and EV/EBITDA ~6x vs application-software peers 27x / 16x: cheap vs peers (EPS 2.64 checked)',
     ('ADTN', 'COMPARABLE COMPANIES'): 'EV/EBITDA ~6x vs its industry peers\' median: cheap vs peers; analysts\' target is ~2.7x the price too',
 }
 def n(s):

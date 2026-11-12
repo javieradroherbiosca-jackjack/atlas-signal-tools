@@ -22,8 +22,7 @@ KNOWN = {
     # 12 Nov 2026 (batch 4/7): reviewed, real readings, not data errors
     ('NVO', 'EV/EBITDA VS OWN HISTORY'): 'ADR shown in DKK through NOVO-B.CO: same de-rating as NOVO-B.CO',
     ('NVO', 'P/E VS OWN HISTORY'): 'same', ('NVO', 'EV/SALES VS OWN HISTORY'): 'same',
-    ('ADTN', 'COMPARABLE COMPANIES'): 'EV/EBITDA 6x after the 2023-25 collapse vs telecom-equipment peers ~15x+: cheap vs peers, analysts target ~2.7x the price',
-    ('OTEX', 'COMPARABLE COMPANIES'): 'P/E ~5.5 on TTM earnings lifted by divestiture gains vs software peers ~20x',
+    ('ADTN', 'COMPARABLE COMPANIES'): 'EV/EBITDA ~6x vs its industry peers\' median: cheap vs peers; analysts\' target is ~2.7x the price too',
 }
 def n(s):
     m = re.search(r'(-?[\d,]+\.?\d*)', s or '')

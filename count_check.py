@@ -7,7 +7,7 @@ Usage: python3 count_check.py
 """
 import asyncio, json, sys
 GRIDS = {'Top conviction': '#opportunitiesGrid', 'Most owned': '#mostOwnedGrid', 'New conviction': '#newConvGrid', 'Triple Signal': '#tripleGrid', 'Undervalued': '#jewelsGrid',
-         'Small caps': '#lotteryGrid', 'International': '#internationalGrid', 'Near lows': '#lowsGrid',
+         'Small caps': '#lotteryGrid', 'International': '#internationalGrid', 'The Atlas Mix': '#lowsGrid',
          'Quality': '#qualityGridSm', 'Health Signal': ['#healthSmGrid', '#healthLgGrid'], 'Cash & Cheap': '#rareGrid'}
 MIN, TARGET = 12, 24
 

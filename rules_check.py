@@ -11,6 +11,8 @@ Checks the rules agreed with Javier against what is live, every day (run by the 
       each company in the picks lines.
   R5  Concession groups (Sacyr, Ferrovial, ACS): net debt/EBITDA or interest cover never listed as a weakness.
   R6  Spanish wording: Atlas Health labels stay in English ("Great Health", never "salud Great").
+  R7  (14 Nov 2026, Ebro Foods case) No company worth $2bn+ without quality scores (Piotroski, Altman…): the backend
+      retries them every night; anything left after that retry, or a retry that did not run, is reported.
 Exit 0 = all rules hold, 1 = a rule is broken (lines start with RULE), 2 = could not run.
 """
 import json, re, sys, datetime as dt, urllib.request
@@ -128,6 +130,23 @@ try:
     m = re.search(r'salud (Great|Good|Excellent|Fair|Weak)', h)
     if m:
         rule('R6', f'Spanish text translates an Atlas Health label: "{m.group(0)}"')
+    # R7 (own try: an old backend without the endpoint must not stop the other rules)
+    try:
+        qg = get(f'{API}/api/screener/quality-gaps', timeout=240)
+        names = lambda xs: ', '.join(f"{x.get('name') or x['ticker']} ({x['ticker']})" for x in xs[:10])
+        lst = qg.get('list') or []
+        if qg.get('count'):
+            if not qg.get('lastNight'):
+                rule('R7', f"{qg['count']} companies of $2bn+ without quality scores and the nightly retry did not run today: {names(lst)}")
+            elif qg.get('pending'):
+                rule('R7', f"{qg['pending']} companies of $2bn+ without quality scores still waiting for the nightly retry: {names([x for x in lst if not x.get('retried')])}")
+            miss = [x for x in lst if x.get('retried')]
+            if len(miss) >= 5:
+                rule('R7', f"{len(miss)} companies of $2bn+ still without quality scores after the retry (provider data?): {names(miss)}")
+            elif miss:
+                notes.append(f"R7: still without quality scores after the retry (check the provider has their accounts): {names(miss)}")
+    except Exception as e:
+        notes.append(f'R7 not checked: {e}')
 except Exception as e:
     print(f'could not run: {e}')
     sys.exit(2)

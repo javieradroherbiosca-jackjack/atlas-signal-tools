@@ -5,12 +5,12 @@ Checks the rules agreed with Javier against what is live, every day (run by the 
       within 20% of the 52-week low AND in the lower third of the 52-week range.
   R2  Today's picks: the Triple Signal pick is in today's Triple Signal list; the Health Signal pick is near its low
       by the same rule (checked with the screener's daily quote).
-  R3  Every app states the official data sources (SEC 13F, CNMV, EDINET) and uses the Atlas logo with the Tau.
+  R3  Every app states the official data sources (SEC 13F, CNMV, EDINET) and uses the brand logo (Nerva owl since 20 Nov 2026; before, the Atlas Tau).
   R4  Latest published posts (public Almanac): no Bill Ackman / Pershing Square; "Paramés" only as "Cobas · Paramés",
       "Iván Martín" only as "Magallanes · Iván Martín"; small-cap warning on every company under $1B; ticker next to
       each company in the picks lines.
   R5  Concession groups (Sacyr, Ferrovial, ACS): net debt/EBITDA or interest cover never listed as a weakness.
-  R6  Spanish wording: Atlas Health labels stay in English ("Great Health", never "salud Great").
+  R6  Spanish wording: Nerva Health labels stay in English ("Great Health", never "salud Great").
   R7  (14 Nov 2026, Ebro Foods case) No company worth $2bn+ without quality scores (Piotroski, Altman…): the backend
       retries them every night; anything left after that retry, or a retry that did not run, is reported.
 Exit 0 = all rules hold, 1 = a rule is broken (lines start with RULE), 2 = could not run.
@@ -86,8 +86,8 @@ try:
         h = get(url, raw=True)
         if 'EDINET' not in h or 'CNMV' not in h:
             rule('R3', f'{name} does not state the official sources (SEC 13F, CNMV, EDINET)')
-        if 'M2 8 L98 8 L86 33' not in h:
-            rule('R3', f'{name} does not use the Atlas logo with the Tau')
+        if 'nv-owl' not in h:   # 20 Nov 2026: Atlas became Nerva, the owl replaces the Tau
+            rule('R3', f'{name} does not use the Nerva logo (owl)')
 
     # R4 — the latest posts in the public Almanac
     al = get('https://atlas-almanac-i6jk.netlify.app/content.json?rc=1')
@@ -129,7 +129,7 @@ try:
     h = get('https://atlasglobalterminal.com/', raw=True) + get('https://atlasglobalterminal.com/stock.js', raw=True)
     m = re.search(r'salud (Great|Good|Excellent|Fair|Weak)', h)
     if m:
-        rule('R6', f'Spanish text translates an Atlas Health label: "{m.group(0)}"')
+        rule('R6', f'Spanish text translates a Nerva Health label: "{m.group(0)}"')
     # R7 (own try: an old backend without the endpoint must not stop the other rules)
     try:
         qg = get(f'{API}/api/screener/quality-gaps', timeout=240)

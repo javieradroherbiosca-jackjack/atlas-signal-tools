@@ -1,4 +1,4 @@
-"""Atlas — Smart Money stakes in European companies from national major-holdings registers.
+"""Nerva — Smart Money stakes in European companies from national major-holdings registers.
 
 Complements the backend's /api/smartmoney/major-holdings (UK FCA, NL AFM, CH SIX) and the
 weekly job's bafin.csv (DE) with: FR (AMF), IT (CONSOB), SE (Finansinspektionen), NO (Oslo
@@ -14,12 +14,12 @@ Output:
                             gen_triple.py merges the stakes and copies the state into triple-signal.json
 
 Each stake: {fundId, manager, holder, issuer, isin, country, pct, date, source, url}.
-Only managers Atlas tracks (aliases) are kept; pct >= 3 and <= 40 at output.
+Only managers Nerva tracks (aliases) are kept; pct >= 3 and <= 40 at output.
 Usage: python3 eu_registers.py [--only fr,it,...] [--se-from ID] [--no-from YYYY-MM-DD]
 """
 import json, os, re, sys, time, html, subprocess, tempfile, datetime as dt, urllib.request, urllib.parse, concurrent.futures as cf
 
-UA = {'User-Agent': 'Mozilla/5.0 (compatible; AtlasGlobalTerminal/1.0; +https://atlasglobalterminal.com)'}
+UA = {'User-Agent': 'Mozilla/5.0 (compatible; NervaGlobalTerminal/1.0; +https://nervaglobalterminal.com)'}
 TODAY = dt.date.today()
 YEARS = 3
 CUT = (TODAY - dt.timedelta(days=365 * YEARS)).isoformat()
@@ -48,6 +48,8 @@ TERMS = {
     'viking': 'Viking Global', 'gmo': 'Grantham', 'man_group': 'Man Group', 'ruffer': 'Ruffer', 'mirabaud': 'Mirabaud',
     'bellevue': 'Bellevue', 'kiltearn': 'Kiltearn', 'hosking': 'Hosking', 'cantillon': 'Cantillon', 'davis': 'Davis Selected',
     'icahn': 'Icahn', 'soros': 'Soros', 'berkshire': 'Berkshire', 'sands_capital': 'Sands Capital', 'platinum': 'Platinum Investment',
+    'orbis': 'Orbis', 'oaktree': 'Oaktree', 'blue_whale': 'Blue Whale', 'aspex': 'Aspex', 'fpa': 'First Pacific Advisors',
+    'harris': 'Harris Associates', 'tweedy': 'Tweedy', 'third_avenue': 'Third Avenue', 'markel': 'Markel', 'fairfax': 'Fairfax',
 }
 prev = (J('prev-triple-signal.json', {}) or {}).get('euRegisters', {}) or {}
 pstate = prev.get('state', {}) or {}
@@ -99,6 +101,43 @@ def latest_by_key(rows):
         if k not in out or (s.get('date') or '') >= (out[k].get('date') or ''):
             out[k] = s
     return out
+
+
+# % held after the event, read next to the holder's name (not "the last % in the text", which in a notice is
+# often another shareholder's or the threshold). None when not certain. Exits are flagged separately.
+_PCT = r'(\d{1,2}(?:[.,]\d{1,4})?)\s?(?:%|per cent|percent|prosent)'
+_PCT_PATS = [re.compile(p, re.I) for p in (
+    r'(?:corresponding to|corresponds to|corresponded to|amounts? to|amounting to|representing|equal to|equivalent to|totall?ing|total of)\s+(?:approximately |approx\.? |about )?' + _PCT + r'\s+of\s+(?:the\s+)?(?:total\s+)?(?:number of\s+)?(?:issued\s+)?(?:share capital|voting rights|shares|issued|outstanding|capital|votes|all shares|registered)',
+    r'(?:holds?|held|owns?|owned|now holds?|holding|holding of|holding amounts to|holding is|holdings? (?:amounts?|totals?) to)\s+(?:a total of\s+)?(?:approximately |approx\.? )?' + _PCT,
+    r'Resulting situation[^%]{0,200}?' + _PCT,
+    r'Total of both in %[^%]{0,300}?' + _PCT)]
+# full exits only: "below 5%" notices usually give the % still held (4.9%), which stays a stake (>= 3%)
+_EXIT = re.compile(r'no longer (?:indirectly |directly )?(?:holds?|owns?|has)|ceased to (?:hold|own)|disposed of all|sold all (?:of )?its|holds? no (?:shares|voting)|no longer a (?:major |substantial )?shareholder', re.I)
+
+
+def read_holder_pct(text, rx):
+    """(pct, exited) for the holder matched by rx, or (None, False) if the text doesn't name it."""
+    m = rx.search(text or '')
+    if not m:
+        return None, False
+    seg = text[max(0, m.start() - 300): m.start() + 2500]
+    exited = bool(_EXIT.search(seg))
+    for p in _PCT_PATS:
+        mm = p.search(seg)
+        if mm:
+            v = num(mm.group(1))
+            if v is not None and 0 < v <= 60:
+                return (0.0 if exited else v), exited
+    return (0.0 if exited else None), exited
+
+
+def home_country(issuer, default):
+    """Country of the company (a Finnish Oyj listed in Oslo or Stockholm is still Finnish)."""
+    i = issuer or ''
+    for rx, c in ((r'\bOyj\b|\bAbp\b', 'FI'), (r'\bA/S\b', 'DK'), (r'\bASA\b', 'NO'), (r'\bAB\b(?: \(publ\))?', 'SE'), (r'\bhf\.?$', 'IS')):
+        if re.search(rx, i):
+            return c
+    return default
 
 
 # ── FR: AMF BDIF (declarations de franchissement de seuil) ─────────────────────
@@ -258,8 +297,13 @@ def build_no():
                 body = json.loads(get(f'https://api3.oslo.oslobors.no/v1/newsreader/message?messageId={mid}', data=b''))['data']['message'].get('body') or ''
             except Exception:
                 body = ''
-        pc = re.findall(r'(\d{1,2}[.,]\d{1,4})\s*%', body)
-        return stake(a, title, issuer, num(pc[-1]) if pc else None, pub, 'NO', 'Oslo Børs NewsWeb',
+        text = title + ' ' + re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]+>', ' ', body)))
+        pct, exited = read_holder_pct(text, a[2])
+        if exited:
+            pct = 0.0          # 26 Nov 2026 (TORM): "Oaktree no longer holds" used to be read as the 19.86% another holder keeps
+        if pct is None:
+            return None        # % not readable: keep the last notice we could read rather than overwrite it with a blank
+        return stake(a, title, issuer, pct, pub, home_country(issuer, 'NO'), 'Oslo Børs NewsWeb',
                      f'https://newsweb.oslobors.no/message/{mid}')
     with cf.ThreadPoolExecutor(4) as ex:
         rows += [r for r in ex.map(one, ids) if r]
@@ -315,6 +359,49 @@ def build_dk():
     return list(latest_by_key(rows).values()), {'dk_docs': {k: v for k, v in done.items() if v}}
 
 
+# ── DK / FI / SE / IS: Nasdaq Nordic company announcements, "Major shareholder announcements" ─────────
+# Full-text search per manager; each announcement is read once (cached in state) for the % and exits.
+NQ_COUNTRY = {'Copenhagen': 'DK', 'Helsinki': 'FI', 'Finland': 'FI', 'Stockholm': 'SE', 'Sweden': 'SE', 'Iceland': 'IS', 'Denmark': 'DK'}
+
+
+def build_nq():
+    done = dict(pstate.get('nq_docs', {}))
+    rows, failed = [], 0
+    for a in ALIASES:
+        term = TERMS.get(a[0]) or a[1]
+        q = urllib.parse.urlencode({'type': 'json', 'countResults': 'true', 'freeText': term, 'cnscategory': '144', 'globalGroup': 'exchangeNotice',
+                                    'globalName': 'NordicAllMarkets', 'displayLanguage': 'en', 'language': 'en', 'limit': 100, 'start': 0, 'dir': 'DESC', 'showCompany': 'true'})
+        try:
+            d = json.loads(get('https://api.news.eu.nasdaq.com/news/query.action?' + q))
+        except Exception as e:
+            failed += 1; print('  NQ search failed', term, e); continue
+        for it in ((d.get('results') or {}).get('item') or []):
+            date = (it.get('published') or '')[:10]
+            if date < CUT:
+                continue
+            key = f"{it.get('disclosureId')}|{a[0]}"
+            if key not in done:
+                try:
+                    t = get(it['messageUrl'])
+                except Exception:
+                    continue
+                t = re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]+>', ' ', re.sub(r'<script.*?</script>|<style.*?</style>', ' ', t, flags=re.S))))
+                pct, exited = read_holder_pct(t, a[2])
+                if pct is None:
+                    done[key] = None                         # manager not named (search noise) or % not readable: never guessed
+                else:
+                    ctry = next((c for k, c in NQ_COUNTRY.items() if k in (it.get('market') or '')), None)
+                    done[key] = stake(a, it.get('headline'), it.get('company'), 0.0 if exited else pct, date, home_country(it.get('company'), ctry),
+                                      'Nasdaq Nordic company announcement', it.get('messageUrl'))
+                time.sleep(0.2)
+            if done[key]:
+                rows.append(done[key])
+        time.sleep(0.3)
+    if failed > len(ALIASES) / 3:
+        raise IOError(f'Nasdaq Nordic: {failed} searches failed')
+    return list(latest_by_key(rows).values()), {'nq_docs': done}
+
+
 # ── BE: FSMA current shareholding structure (one PDF per issuer) ───────────────
 def build_be():
     slugs = []
@@ -363,11 +450,12 @@ def build_be():
 
 
 # IT (CONSOB) is left out: its site sits behind a bot-check (captcha) for automated clients, and we don't get around those.
-SOURCES = [('fr', build_fr), ('se', build_se), ('no', build_no), ('dk', build_dk), ('be', build_be)]
-COUNTRY = {'fr': 'FR', 'se': 'SE', 'no': 'NO', 'dk': 'DK', 'be': 'BE'}
+SOURCES = [('fr', build_fr), ('se', build_se), ('no', build_no), ('dk', build_dk), ('nq', build_nq), ('be', build_be)]
+COUNTRY = {'fr': 'FR', 'se': 'SE', 'no': 'NO', 'dk': 'DK', 'be': 'BE', 'nq': 'NQ'}
 stakes, state, sources = [], dict(pstate), {}
 for k, fn in SOURCES:
-    old = [s for s in pstakes if s.get('country') == COUNTRY[k]]
+    SRC = {'fr': 'AMF', 'se': 'Finansinspektionen', 'no': 'Oslo Børs NewsWeb', 'dk': 'Finanstilsynet (OAM)', 'nq': 'Nasdaq Nordic company announcement', 'be': 'FSMA'}
+    old = [s for s in pstakes if (s.get('source') or '').startswith(SRC[k])]
     if ONLY and k not in ONLY:
         stakes += old; sources[k] = {'ok': True, 'skipped': True, 'stakes': len(old)}
         continue
@@ -384,7 +472,7 @@ for k, fn in SOURCES:
 
 # ISIN → home-exchange ticker (OpenFIGI, no key: 25 requests/min, 10 ISINs per request). The screener lacks
 # some exchanges entirely (Euronext Paris), so name matching alone isn't enough there.
-FIGI_EX = {'FR': ('FP', '.PA'), 'SE': ('SS', '.ST'), 'NO': ('NO', '.OL'), 'DK': ('DC', '.CO'), 'BE': ('BB', '.BR')}
+FIGI_EX = {'FR': ('FP', '.PA'), 'SE': ('SS', '.ST'), 'NO': ('NO', '.OL'), 'DK': ('DC', '.CO'), 'BE': ('BB', '.BR'), 'FI': ('FH', '.HE')}
 isin_map = dict(state.get('isin_map', {}))
 todo = sorted({(s['isin'], s['country']) for s in stakes if s.get('isin') and s.get('country') in FIGI_EX and s['isin'] not in isin_map})
 for i in range(0, len(todo), 10):
@@ -405,6 +493,11 @@ for s in stakes:
         s['ticker'] = isin_map[s['isin']]
 state['isin_map'] = isin_map
 
+# 26 Nov 2026: managers that left Smart Money (Handelsbanken, Polar Capital…) were still carried from last week's state
+_ids = {a[0] for a in ALIASES}
+stakes = [s for s in stakes if s.get('fundId') in _ids]
+# the same stake can come from two sources (Oslo and Nasdaq for a dual listing): keep the latest announcement
+stakes = list(latest_by_key(stakes).values())
 keep = [s for s in stakes if s.get('pct') is not None]   # state keeps everything; output filters
 out = [s for s in keep if 3 <= s['pct'] <= 40 or (s['fundId'] in ('exor', 'icahn', 'berkshire') and s['pct'] >= 3)]
 json.dump({'asOf': TODAY.isoformat(), 'sources': sources, 'count': len(out), 'stakes': out,

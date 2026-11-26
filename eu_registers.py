@@ -47,7 +47,7 @@ TERMS = {
     'ifp': 'Independent Franchise', 'wcm': 'WCM', 'oasis': 'Oasis Management', 'lone_pine': 'Lone Pine',
     'viking': 'Viking Global', 'gmo': 'Grantham', 'man_group': 'Man Group', 'ruffer': 'Ruffer', 'mirabaud': 'Mirabaud',
     'bellevue': 'Bellevue', 'kiltearn': 'Kiltearn', 'hosking': 'Hosking', 'cantillon': 'Cantillon', 'davis': 'Davis Selected',
-    'icahn': 'Icahn', 'soros': 'Soros', 'berkshire': 'Berkshire', 'sands_capital': 'Sands Capital', 'platinum': 'Platinum Investment',
+    'soros': 'Soros', 'berkshire': 'Berkshire', 'sands_capital': 'Sands Capital', 'platinum': 'Platinum Investment',
     'orbis': 'Orbis', 'oaktree': 'Oaktree', 'blue_whale': 'Blue Whale', 'aspex': 'Aspex', 'fpa': 'First Pacific Advisors',
     'harris': 'Harris Associates', 'tweedy': 'Tweedy', 'third_avenue': 'Third Avenue', 'markel': 'Markel', 'fairfax': 'Fairfax',
 }
@@ -499,7 +499,7 @@ stakes = [s for s in stakes if s.get('fundId') in _ids]
 # the same stake can come from two sources (Oslo and Nasdaq for a dual listing): keep the latest announcement
 stakes = list(latest_by_key(stakes).values())
 keep = [s for s in stakes if s.get('pct') is not None]   # state keeps everything; output filters
-out = [s for s in keep if 3 <= s['pct'] <= 40 or (s['fundId'] in ('exor', 'icahn', 'berkshire') and s['pct'] >= 3)]
+out = [s for s in keep if 3 <= s['pct'] <= 40 or (s['fundId'] in ('exor', 'berkshire') and s['pct'] >= 3)]
 json.dump({'asOf': TODAY.isoformat(), 'sources': sources, 'count': len(out), 'stakes': out,
            'state': state, 'allStakes': keep}, open('eu-registers.json', 'w'), ensure_ascii=False)
 print('eu-registers.json:', len(out), 'stakes', {k: v.get('stakes', v.get('carried')) for k, v in sources.items()})

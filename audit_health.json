@@ -1,58 +1,23 @@
 {
- "checked_rows": 26452,
+ "checked_rows": 26457,
  "sample": 56,
  "errors": [
   {
-   "t": "CPF",
+   "t": "GABC",
    "check": "G",
-   "msg": "sales growth 6.4% on Atlas vs 33.8% in SEC filings (CY2024\u2192CY2025)"
+   "msg": "sales growth 54.5% on Atlas vs 37.8% in SEC filings (CY2024\u2192CY2025)"
   },
   {
-   "t": "CPF",
+   "t": "MELI",
    "check": "G",
-   "msg": "net margin 27.6% on Atlas vs 217.7% in SEC filings (twelve months to 2026-09-30)"
-  },
-  {
-   "t": "KEY",
-   "check": "G",
-   "msg": "sales growth 23.6% on Atlas vs 6.5% in SEC filings (CY2024\u2192CY2025)"
-  },
-  {
-   "t": "KEY",
-   "check": "G",
-   "msg": "net margin 20.1% on Atlas vs 26.6% in SEC filings (twelve months to 2026-09-30)"
-  },
-  {
-   "t": "USB",
-   "check": "G",
-   "msg": "sales growth 0.3% on Atlas vs 4.4% in SEC filings (CY2024\u2192CY2025)"
-  },
-  {
-   "t": "USB",
-   "check": "G",
-   "msg": "net margin 19.0% on Atlas vs 27.6% in SEC filings (twelve months to 2026-09-30)"
-  },
-  {
-   "t": "UTI",
-   "check": "G",
-   "msg": "sales growth 7.4% on Atlas vs 14.0% in SEC filings (CY2024\u2192CY2025)"
-  },
-  {
-   "t": "VISN",
-   "check": "G",
-   "msg": "sales growth -54.1% on Atlas vs 39.7% in SEC filings (CY2024\u2192CY2025)"
-  },
-  {
-   "t": "VISN",
-   "check": "G",
-   "msg": "net margin 72.9% on Atlas vs 381.9% in SEC filings (twelve months to 2026-09-30)"
+   "msg": "sales growth 39.1% on Atlas vs 34.3% in SEC filings (CY2024\u2192CY2025)"
   }
  ],
  "warnings": [
   {
-   "t": "ICE",
+   "t": "MELI",
    "check": "G",
-   "msg": "net margin 31.7% vs 29.6% at the SEC (small gap: one-offs or discontinued operations?)"
+   "msg": "net margin 4.9% vs 7.1% at the SEC (small gap: one-offs or discontinued operations?)"
   }
  ]
 }
